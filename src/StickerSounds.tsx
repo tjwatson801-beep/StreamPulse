@@ -1,0 +1,30 @@
+import { useState } from "react";
+import { Settings, StickerOption, StickerReaction } from "./types";
+import { stickerOptions } from "./stickerCatalog";
+type Props = { settings: Settings; update: (change: (current: Settings) => Settings) => void; pickSound: () => Promise<string | null | undefined>; preview: (path: string, label: string, volume?: number) => Promise<void>; connected: boolean; notice: string };
+function StickerPicture({ sticker }: { sticker?: StickerOption }) {
+  const [failedUrl, setFailedUrl] = useState("");
+  return sticker?.imageUrl?.startsWith("https://") && failedUrl !== sticker.imageUrl ? <img className="sticker-picture" src={sticker.imageUrl} alt="" onError={()=>setFailedUrl(sticker.imageUrl || "")}/> : <span className="sticker-picture placeholder" aria-hidden="true">✦</span>;
+}
+export default function StickerSounds({ settings, update, pickSound, preview, connected, notice }: Props) {
+  const [search, setSearch] = useState("");
+  const options = stickerOptions(settings);
+  const change = (id: string, patch: Partial<StickerReaction>) => update(s=>({...s,stickerReactions:s.stickerReactions.map(r=>r.id===id?{...r,...patch}:r)}));
+  async function chooseSound(id: string) { const soundPath = await pickSound(); if (soundPath) change(id, { soundPath }); }
+  const add = () => update(s=>({...s,stickerReactions:[...s.stickerReactions,{id:crypto.randomUUID(),stickerId:"",soundPath:"",enabled:true,volume:1}]}));
+  const rows = settings.stickerReactions.filter(r=>`${options.find(o=>o.id===r.stickerId)?.name || "Choose sticker"} ${r.soundPath.split(/[\\/]/).pop()}`.toLowerCase().includes(search.toLowerCase()));
+  return <><header><div><small>CHAT STICKERS</small><h1>Sticker sound alerts</h1></div></header><p>Choose a sticker by its picture, then select the sound it should play.</p>
+    <section className="card sticker-alerts"><div className="sticker-toolbar"><button className="primary" onClick={add}>＋ Create sound alert</button><label><input type="checkbox" checked={settings.stickerSoundsEnabled} onChange={e=>update(s=>({...s,stickerSoundsEnabled:e.target.checked}))}/> Sounds enabled</label><input aria-label="Search sound alerts" placeholder="Search alerts…" value={search} onChange={e=>setSearch(e.target.value)}/></div>
+    <div className="sticker-table-wrap"><table className="sticker-table"><thead><tr><th>Test / remove</th><th>Enabled</th><th>Sticker</th><th>Sound</th><th>Volume</th></tr></thead><tbody>
+    {rows.map(r=>{const selected=options.find(o=>o.id===r.stickerId); return <tr key={r.id}>
+      <td><div className="sticker-actions"><button aria-label="Preview sound" title="Preview sound" disabled={!r.soundPath} onClick={()=>preview(r.soundPath,selected?.name || "Sticker preview",r.volume ?? 1)}>▶</button><button aria-label="Remove sound alert" title="Remove sound alert" onClick={()=>update(s=>({...s,stickerReactions:s.stickerReactions.filter(item=>item.id!==r.id)}))}>×</button></div></td>
+      <td><input aria-label="Enable sound alert" type="checkbox" checked={r.enabled} onChange={e=>change(r.id,{enabled:e.target.checked})}/></td>
+      <td><details className="sticker-picker" onKeyDown={e=>{if(e.key==="Escape"){e.currentTarget.open=false;e.currentTarget.querySelector("summary")?.focus();}}}><summary><StickerPicture sticker={selected}/><span>{selected?.name || "Choose sticker"}</span><span aria-hidden="true">▾</span></summary>
+      <div className="sticker-options">{options.length===0?<p>No saved stickers yet. Have a viewer send one while connected to your LIVE; it will appear here automatically.</p>:options.map(option=><button key={option.id} disabled={settings.stickerReactions.some(other=>other.id!==r.id&&other.stickerId===option.id)} onClick={e=>{change(r.id,{stickerId:option.id});const details=e.currentTarget.closest("details");if(details){details.open=false;details.querySelector("summary")?.focus();}}}><StickerPicture sticker={option}/><span>{option.name}</span>{option.id===r.stickerId&&<span aria-hidden="true">✓</span>}</button>)}</div></details>
+      {selected&&<input className="sticker-name" aria-label="Sticker display name" title="Give this sticker a name you recognize" value={selected.name} onChange={e=>{const name=e.target.value;update(s=>({...s,stickerCatalog:stickerOptions(s).map(o=>o.id===selected.id?{...o,name}:o)}));}}/>}</td>
+      <td><div className="sticker-sound"><button onClick={()=>chooseSound(r.id)}>Select sound</button><span title={r.soundPath}>{r.soundPath.split(/[\\/]/).pop() || "No sound selected"}</span></div></td>
+      <td><label className="sticker-volume"><input aria-label="Sound volume" type="range" min="0" max="1" step="0.05" value={r.volume ?? 1} onChange={e=>change(r.id,{volume:Number(e.target.value)})}/><span>{Math.round((r.volume ?? 1)*100)}%</span></label></td>
+    </tr>})}
+    {rows.length===0&&<tr><td colSpan={5} className="sticker-empty">{search?"No alerts match your search.":"Create a sound alert to choose a sticker and sound."}</td></tr>}
+    </tbody></table></div></section><section className="card"><h2>Your sticker library</h2><p>{options.length} saved stickers · {connected?"Listening to your LIVE":"Connect to your LIVE to add stickers"}</p><p>Stickers received in chat are saved automatically. Give each one a label you recognize; its sound assignment stays linked.</p>{notice&&<p>{notice}</p>}<div className="sticker-library">{options.map(sticker=><div className="sticker-library-item" key={sticker.id}><StickerPicture sticker={sticker}/><label>Sticker label<input aria-label={`Label for sticker ${sticker.id}`} value={sticker.name} onChange={e=>{const name=e.target.value;update(s=>({...s,stickerCatalog:stickerOptions(s).map(o=>o.id===sticker.id?{...o,name}:o)}));}}/><span>Sticker image URL</span><input type="url" aria-label={`Image URL for sticker ${sticker.id}`} placeholder="https://�" value={sticker.imageUrl || ""} onChange={e=>{const imageUrl=e.target.value;update(s=>({...s,stickerCatalog:stickerOptions(s).map(o=>o.id===sticker.id?{...o,imageUrl}:o)}));}}/></label></div>)}</div></section></>;
+}

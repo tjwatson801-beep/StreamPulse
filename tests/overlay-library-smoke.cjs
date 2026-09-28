@@ -1,0 +1,41 @@
+const assert=require('node:assert/strict');
+const path=require('node:path');
+const fs=require('node:fs/promises');
+const {app,BrowserWindow}=require('electron');
+const {startOverlayServer,stopOverlayServer,showOverlayAlert}=require('../dist-electron/overlayServer');
+app.setPath('userData',path.join(app.getPath('temp'),'streampulse-library-test'));
+let windows=[];
+const evaluate=(win,code)=>win.webContents.executeJavaScript(code);
+async function wait(win,code){for(let i=0;i<100;i++){if(await evaluate(win,code))return;await new Promise(r=>setTimeout(r,100));}throw Error(code);}
+app.whenReady().then(async()=>{try{
+ const port=await startOverlayServer(0);
+ async function open(route){const win=new BrowserWindow({show:false,width:640,height:480,webPreferences:{sandbox:true,backgroundThrottling:false,offscreen:true}});windows.push(win);await win.loadURL(`http://127.0.0.1:${port}${route}`);await wait(win,"session !== '' && ws.readyState === 1");return win;}
+ const likes=await open('/overlay/library/like-pop'),gifts=await open('/overlay/library/gift-highlight'),legacy=await open('/overlay/gifts');
+ await showOverlayAlert({channel:'like-pop',title:'100 likes!',body:'@GoldFan is spreading the love',accent:'#ff629c',theme:'spotlight',durationMs:1000});
+ await wait(likes,"t.textContent==='100 likes!' && a.classList.contains('show')");
+ assert.equal(await evaluate(gifts,'t.textContent'),'');assert.equal(await evaluate(legacy,'t.textContent'),'');
+ await showOverlayAlert({channel:'like-pop',title:'200 likes!',body:'Next milestone',durationMs:1000});
+ assert.equal(await evaluate(likes,'t.textContent'),'100 likes!');
+ await wait(likes,"t.textContent==='200 likes!'");
+ await showOverlayAlert({channel:'gift-highlight',imageUrl:'https://cdn.tik.tools/gifts/dca13c81e1bc524a3d2388b5.png',title:'Rose ×5',body:'Thank you, @GoldFan!',accent:'#62ffd1',theme:'glow',durationMs:3000});
+ await wait(gifts,"t.textContent==='Rose ×5' && a.classList.contains('show')");
+ await wait(gifts,"document.querySelector('#i').naturalWidth>0 && document.querySelector('#symbol').style.display==='none'");
+ await evaluate(gifts,"document.body.style.background='#14212c'; a.style.animation='none'; a.style.transition='none'; void 0");
+ await wait(gifts,"getComputedStyle(a).opacity==='1'");
+ await new Promise(r=>setTimeout(r,500));
+ await fs.writeFile(path.join(process.cwd(),'overlay-library-preview.png'),(await gifts.webContents.capturePage()).toPNG());
+ await evaluate(gifts,'ws.onclose=null;ws.close();clearTimeout(retry);window.WebSocket=function(){throw Error("blocked")};void 0');
+ await showOverlayAlert({channel:'gift-highlight',title:'HTTP fallback',body:'Delivered once',durationMs:1000});
+ await wait(gifts,"t.textContent==='HTTP fallback'");
+ await showOverlayAlert({title:'Legacy entrance',body:'Still isolated',durationMs:1000});
+ await wait(legacy,"t.textContent==='Legacy entrance'");
+ assert.notEqual(await evaluate(gifts,'t.textContent'),'Legacy entrance');
+ const ui=new BrowserWindow({show:false,width:1280,height:1000,webPreferences:{sandbox:true,offscreen:true,backgroundThrottling:false}});windows.push(ui);
+ await ui.loadFile(path.join(process.cwd(),'dist/index.html'));
+ await wait(ui,"Array.from(document.querySelectorAll('aside button')).some(b=>b.textContent==='Overlay')");
+ await evaluate(ui,"Array.from(document.querySelectorAll('aside button')).find(b=>b.textContent==='Overlay').click();void 0");
+ await wait(ui,"document.querySelectorAll('.overlay-library-grid article').length===2");
+ await new Promise(r=>setTimeout(r,500));
+ await fs.writeFile(path.join(process.cwd(),'overlay-library-controls.png'),(await ui.webContents.capturePage()).toPNG());
+ console.log('Passed: isolated channels, queued alerts, styling, HTTP fallback, legacy delivery; preview captured.');
+}catch(e){console.error(e);process.exitCode=1;}finally{windows.forEach(w=>w.destroy());await stopOverlayServer();app.exit(process.exitCode||0);}});
