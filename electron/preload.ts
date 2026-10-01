@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld("streamPulseCore", {
   overlayShow: (args: unknown) => ipcRenderer.invoke("core:overlay-show", args),
   webhook: (args: unknown) => ipcRenderer.invoke("core:webhook", args),
   updateStatus: () => ipcRenderer.invoke("core:update-status"), updateCheck: () => ipcRenderer.invoke("core:update-check"), updateDownload: () => ipcRenderer.invoke("core:update-download"), updateInstall: () => ipcRenderer.invoke("core:update-install"),
+  health: () => ipcRenderer.invoke("core:health"), backupList: () => ipcRenderer.invoke("core:backup-list"), backupCreate: () => ipcRenderer.invoke("core:backup-create"), backupRestore: (id: string) => ipcRenderer.invoke("core:backup-restore", id),
   pickSound: () => ipcRenderer.invoke("core:pick-sound"),
   pickImage: () => ipcRenderer.invoke("core:pick-image"),
   giftCatalog: () => ipcRenderer.invoke("core:gift-catalog"),

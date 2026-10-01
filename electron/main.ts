@@ -1,3 +1,6 @@
+import { claimInstance } from './singleInstance';
+import { SettingsStore } from './settingsStore';
+import { probeOverlay } from './connectionHealth';
 import { setupUpdater } from './updater';
 import { sendWebhook } from './webhook';
 import { app, BrowserWindow, dialog, ipcMain, safeStorage } from "electron";
@@ -11,6 +14,8 @@ import { OVERLAY_PORT, processLibraryEvent, setLikesAppearance, likesTracker, pu
 import { extractTunnelToken, getSecureOverlayInfo, normalizeHostname, restartSecureTunnel, startSecureTunnel, stopSecureTunnel } from "./secureTunnel";
 
 let window: BrowserWindow | null = null;
+const primaryInstance = claimInstance(app, () => window);
+const settingsStore = new SettingsStore(app.getPath("userData"));
 let provider: LiveProvider | null = null;
 let closing = false;
 let reconnectTimer: NodeJS.Timeout | null = null;
@@ -108,7 +113,9 @@ async function createWindow() {
 }
 
 app.whenReady().then(async () => {
-  setupUpdater(() => reconnectEnabled, async () => { closing = true; await disconnect(); await stopSecureTunnel(); await stopOverlayServer(); });
+  if (!primaryInstance) return;
+  try { await settingsStore.backup(`Startup ${app.getVersion()}`); } catch { diagnosticLog("Startup backup failed; settings file may need recovery."); }
+  setupUpdater(() => reconnectEnabled, async () => { await settingsStore.backup("Before update"); closing = true; await disconnect(); await stopSecureTunnel(); await stopOverlayServer(); });
   diagnosticLog(`StreamPulse ${app.getVersion()} started`);
   ipcMain.handle("core:gift-catalog", async () => ({ ok: false, error: "StreamPulse uses your saved gift library and automatically adds gifts received during LIVE. A full catalog download is not available through this connection." }));
   ipcMain.handle("core:diagnostics", async () => {
@@ -117,10 +124,25 @@ app.whenReady().then(async () => {
     let recent = ""; try { recent = (await fs.readFile(diagnosticLogPath(), "utf8")).split("\n").slice(-60).join("\n"); } catch {}
     return `StreamPulse ${app.getVersion()}\n${JSON.stringify(snapshot, null, 2)}\nLog: ${diagnosticLogPath()}\n${logFailure}\n\n${recent}`;
   });
+  ipcMain.handle('core:backup-list', () => settingsStore.list());
+  ipcMain.handle('core:backup-create', () => settingsStore.backup('Manual backup'));
+  ipcMain.handle('core:backup-restore', async (_event, id: string) => {
+    if(reconnectEnabled) return {error:'Disconnect from LIVE before restoring.'};
+    const answer = await dialog.showMessageBox({type:'question',buttons:['Cancel','Restore'],defaultId:0,cancelId:0,message:'Restore this settings backup?',detail:'Current settings will be backed up first. Restart StreamPulse afterward if your connection or tunnel settings changed.'});
+    if(answer.response!==1)return {cancelled:true};
+    if(reconnectEnabled)return {error:'Disconnect from LIVE before restoring.'};
+    const state=await settingsStore.restore(id);setLikesAppearance(state);return {state};
+  });
+  let healthPending: Promise<unknown> | null = null;
+  ipcMain.handle('core:health', () => {
+    if(healthPending)return healthPending;
+    const secure=getSecureOverlayInfo();
+    healthPending=(async()=>{const [local,publicHealth]=await Promise.all([probeOverlay(`http://127.0.0.1:${OVERLAY_PORT}/health`),secure.overlayUrl?probeOverlay(new URL('/health',secure.overlayUrl).href):Promise.resolve({ok:false,message:'No active public link'})]);return {live:provider?.status() || (reconnectEnabled?'Connecting':'Disconnected'),local,public:publicHealth,tunnel:secure.processRunning};})().finally(()=>{healthPending=null;});return healthPending;
+  });
   ipcMain.handle("core:likes-reset", async () => { likesTracker.reset(); publishLikes(); return { ok: true }; });
   ipcMain.handle("core:webhook", (_event, args: unknown) => sendWebhook(args));
-  ipcMain.handle("core:load", async () => { try { return JSON.parse(await fs.readFile(statePath(), "utf8")); } catch { return {}; } });
-  ipcMain.handle("core:save", async (_event, state: unknown) => { await fs.mkdir(path.dirname(statePath()), { recursive: true }); await fs.writeFile(statePath(), JSON.stringify(state, null, 2)); setLikesAppearance(state as { likesBackgroundOpacity?: unknown; likesShowBorder?: unknown }); return { ok: true }; });
+  ipcMain.handle("core:load", async () => { try { return await settingsStore.load(); } catch { return { settingsLoadError: "Settings could not be read. Restore a backup in Settings before making changes." }; } });
+  ipcMain.handle("core:save", async (_event, state: unknown) => { await settingsStore.save(state); setLikesAppearance(state as { likesBackgroundOpacity?: unknown; likesShowBorder?: unknown }); return { ok: true }; });
   ipcMain.handle("core:credential-status", async () => ({ hasCredential: Boolean(await readKey()), hasTunnelCredential: Boolean(await readTunnelToken()) }));
   ipcMain.handle("core:credential-save", async (_event, value: string) => { if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: "Windows encryption is unavailable." }; await fs.mkdir(path.dirname(secretPath()), { recursive: true }); await fs.writeFile(secretPath(), safeStorage.encryptString(String(value).trim())); return { ok: true }; });
   ipcMain.handle("core:connect", async (_event, username: string, mode?: string) => {
@@ -145,7 +167,7 @@ app.whenReady().then(async () => {
     if (!/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(hostname)) return { ok: false, error: "Enter a valid hostname such as overlay.streampulse.us." };
     await fs.mkdir(path.dirname(tunnelSecretPath()), { recursive: true }); await fs.writeFile(tunnelSecretPath(), safeStorage.encryptString(token));
     let state: Record<string, unknown> = {}; try { state = JSON.parse(await fs.readFile(statePath(), "utf8")); } catch {}
-    state.permanentOverlayHostname = hostname; await fs.writeFile(statePath(), JSON.stringify(state, null, 2));
+    state.permanentOverlayHostname = hostname; await settingsStore.save(state);
     const secure = await restartSecureTunnel({ token, hostname }); return { ok: secure.connected, ...secure, overlayUrl: secure.overlayUrl || `http://localhost:${OVERLAY_PORT}/overlay/gifts?v=24-repeat` };
   });
   await createWindow();

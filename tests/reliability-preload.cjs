@@ -1,0 +1,4 @@
+const {contextBridge}=require('electron');let lastSave={},backups=[];
+contextBridge.exposeInMainWorld('streamPulseCore',{
+ load:async()=>({username:'BeforeRestore'}),save:async state=>{lastSave=state;return{ok:true};},credentialStatus:async()=>({}),info:async()=>({overlayUrl:'http://localhost:17890/overlay/gifts'}),onStatus:()=>()=>{},onEvent:()=>()=>{},updateStatus:async()=>({phase:'current',current:'test',version:'',notes:'',percent:0,error:''}),health:async()=>({live:'Disconnected',local:{message:'Reachable'},public:{message:'HTTP 502'},tunnel:true}),backupList:async()=>backups,backupCreate:async()=>{backups=[{id:'backup',createdAt:new Date().toISOString(),reason:'Manual test'}];return'backup';},backupRestore:async()=>({state:{username:'AfterRestore',giftActions:[],reactions:[]}}),testLastSave:()=>lastSave
+});

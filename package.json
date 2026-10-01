@@ -1,6 +1,6 @@
 {
   "name": "streampulse-core",
-  "version": "0.1.0-alpha.40",
+  "version": "0.1.0-alpha.41",
   "private": true,
   "description": "StreamPulse Core - focused TikTok LIVE Studio reactions and TTS",
   "author": "StreamPulse",
@@ -10,7 +10,8 @@
     "build": "vite build && tsc -p electron/tsconfig.json",
     "start": "electron .",
     "pack:win": "npm run build && electron-builder --win --dir",
-    "dist:win": "npm run build && electron-builder --win nsis"
+    "dist:win": "npm run build && electron-builder --win nsis",
+    "release:check": "npm run build && tsc --noEmit && node scripts/release-check.cjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",
