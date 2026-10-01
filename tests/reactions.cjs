@@ -157,7 +157,7 @@ async function main() {
   };
   const core = { onStatus: () => () => {}, onEvent: fn => { handleEvent = fn; return () => {}; },
     overlayShow: async args => { overlays.push(args); return { ok: true }; } };
-  const { default: App } = loadTs('src/App.tsx', { react, './types': { defaults }, './giftCatalog': gifts, './GiftPicker': { default: () => null }, './stickerCatalog': catalog, './StickerSounds': { default: () => null } }, {
+  const { default: App } = loadTs('src/App.tsx', { react, './Updates': { default: () => null }, './giftActions': loadTs('src/giftActions.ts', {}), './types': { defaults }, './giftCatalog': gifts, './GiftPicker': { default: () => null }, './stickerCatalog': catalog, './StickerSounds': { default: () => null } }, {
     React: react, window: { streamPulseCore: core }, crypto: require('node:crypto').webcrypto,
     Audio: class { constructor(url) { this.url = url; } async play() { sounds.push(this.url); soundVolumes.push(this.volume); } }
   });
@@ -228,8 +228,19 @@ async function main() {
   settings.giftReactionsEnabled = true;
   await handleEvent({ ...heart, giftName: 'Unconfigured gift' });
   assert.equal(overlays.length, beforeGifts + 2, 'Unconfigured gift fallback is preserved');
+  settings.giftReactionsEnabled = false;
+  settings.giftActions = [{ id: 'action', enabled: true, giftName: 'Rose', minimumCount: 2, kind: 'overlay', message: '{username}: {gift} x{count}', imagePath: 'C:/images/rose.gif', durationMs: 3000 }];
+  const beforeActions = overlays.length;
+  await handleEvent({ ...event, type: 'Gift', giftName: 'Rose', count: 2, comboComplete: false });
+  await handleEvent({ ...event, type: 'Gift', giftName: 'Rose', count: 1, comboComplete: true });
+  assert.equal(overlays.length, beforeActions, 'Rules wait for completed combos and the minimum quantity');
+  await handleEvent({ ...event, type: 'Gift', giftName: 'Rose', count: 2, comboComplete: true });
+  assert.equal(overlays.length, beforeActions + 1, 'Actions run independently of Gift Reactions');
+  assert.equal(overlays.at(-1).body, '@GOLDFAN: Rose x2');
+  assert.equal(overlays.at(-1).imagePath, 'C:/images/rose.gif');
+  settings.giftActions[0].enabled = false;
+  await handleEvent({ ...event, type: 'Gift', giftName: 'Rose', count: 2, comboComplete: true });
+  assert.equal(overlays.length, beforeActions + 1, 'Disabled action does not execute');
   console.log('Passed: repeated joins, duplicate deliveries, gift combo completion and images, sticker parsing, matching, repeats, and disabled settings.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
-
-

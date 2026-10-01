@@ -1,3 +1,5 @@
+import { setupUpdater } from './updater';
+import { sendWebhook } from './webhook';
 import { app, BrowserWindow, dialog, ipcMain, safeStorage } from "electron";
 import fs from "fs/promises";
 import { appendFileSync, existsSync, mkdirSync, statSync, renameSync, rmSync } from "fs";
@@ -106,6 +108,7 @@ async function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  setupUpdater(() => reconnectEnabled, async () => { closing = true; await disconnect(); await stopSecureTunnel(); await stopOverlayServer(); });
   diagnosticLog(`StreamPulse ${app.getVersion()} started`);
   ipcMain.handle("core:gift-catalog", async () => ({ ok: false, error: "StreamPulse uses your saved gift library and automatically adds gifts received during LIVE. A full catalog download is not available through this connection." }));
   ipcMain.handle("core:diagnostics", async () => {
@@ -115,6 +118,7 @@ app.whenReady().then(async () => {
     return `StreamPulse ${app.getVersion()}\n${JSON.stringify(snapshot, null, 2)}\nLog: ${diagnosticLogPath()}\n${logFailure}\n\n${recent}`;
   });
   ipcMain.handle("core:likes-reset", async () => { likesTracker.reset(); publishLikes(); return { ok: true }; });
+  ipcMain.handle("core:webhook", (_event, args: unknown) => sendWebhook(args));
   ipcMain.handle("core:load", async () => { try { return JSON.parse(await fs.readFile(statePath(), "utf8")); } catch { return {}; } });
   ipcMain.handle("core:save", async (_event, state: unknown) => { await fs.mkdir(path.dirname(statePath()), { recursive: true }); await fs.writeFile(statePath(), JSON.stringify(state, null, 2)); setLikesAppearance(state as { likesBackgroundOpacity?: unknown; likesShowBorder?: unknown }); return { ok: true }; });
   ipcMain.handle("core:credential-status", async () => ({ hasCredential: Boolean(await readKey()), hasTunnelCredential: Boolean(await readTunnelToken()) }));

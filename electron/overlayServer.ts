@@ -88,12 +88,20 @@ window.addEventListener('online',()=>{connect();poll()});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){connect();poll()}});
 </script></body></html>`;
 function libraryHtml(kind: string) {
-  return overlayHtml.replace("</style>", `
+  return overlayHtml.replace('<body>', kind === 'gift-highlight' ? '<body class="banner">' : '<body>').replace("</style>", `
 .alert{box-sizing:border-box;top:50%;min-width:0;width:min(540px,90vw);padding:30px;border-color:var(--accent);box-shadow:0 0 55px color-mix(in srgb,var(--accent) 25%,transparent)}
 h1{color:var(--accent);font-size:38px;overflow-wrap:anywhere}p{overflow-wrap:anywhere}.show{animation:pop .45s ease-out}
 .alert[data-theme=minimal]{background:rgba(10,15,22,.88);border:0;border-left:5px solid var(--accent);border-radius:8px;box-shadow:none;text-align:left}
 .alert[data-theme=spotlight]{background:radial-gradient(ellipse at top,color-mix(in srgb,var(--accent) 35%,#10121c),#10121cf0);border-radius:36px;border-width:3px}
 img{width:130px;height:130px;border-radius:18px}#symbol{display:block;color:var(--accent);font-size:68px;line-height:1;margin-bottom:14px}
+.banner .alert{width:min(860px,94vw);display:grid;grid-template-columns:96px minmax(0,1fr);grid-template-rows:auto auto;column-gap:22px;align-content:center;min-height:140px;padding:20px 28px;text-align:left;border-radius:20px}
+.banner .alert[data-theme=spotlight]{border-radius:20px;background:linear-gradient(110deg,color-mix(in srgb,var(--accent) 30%,#10121c),#10121cf0 65%)}
+.banner .alert[data-theme=minimal]{border-radius:8px}
+.banner img,.banner #symbol{grid-column:1;grid-row:1 / 3;width:96px;height:96px;margin:0;align-self:center;object-fit:contain}
+.banner #symbol{font-size:64px;line-height:96px;text-align:center}
+.banner h1{grid-column:2;grid-row:1;align-self:end;font-size:clamp(22px,4.5vw,34px);line-height:1.15;min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.banner p{grid-column:2;grid-row:2;align-self:start;margin:6px 0 0;font-size:clamp(16px,3vw,22px);line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+@media(max-width:480px){.banner .alert{grid-template-columns:64px minmax(0,1fr);column-gap:14px;padding:16px;min-height:112px}.banner img,.banner #symbol{width:64px;height:64px}.banner #symbol{font-size:44px;line-height:64px}}
 @keyframes pop{0%{transform:translate(-50%,-50%) scale(.65)}70%{transform:translate(-50%,-50%) scale(1.05)}100%{transform:translate(-50%,-50%) scale(1)}}
 </style>`).replace('<img id="i">', `<span id="symbol">${kind === "like-pop" ? "&#9829;" : "&#10022;"}</span><img id="i">`)
     .replace("function receive(d){", `const queue=[];let busy=false;
