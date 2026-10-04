@@ -1,6 +1,14 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("streamPulseCore", {
+  onFlushSettings: (handler: () => Promise<void>) => {
+    const listener = async (_: unknown, token: string) => {
+      try { await handler(); ipcRenderer.send('core:settings-flushed', {token}); }
+      catch (error) { ipcRenderer.send('core:settings-flushed', {token, error: error instanceof Error ? error.message : 'Settings could not be saved.'}); }
+    };
+    ipcRenderer.on('core:flush-settings', listener);
+    return () => ipcRenderer.removeListener('core:flush-settings', listener);
+  },
   load: () => ipcRenderer.invoke("core:load"), save: (state: unknown) => ipcRenderer.invoke("core:save", state),
   credentialStatus: () => ipcRenderer.invoke("core:credential-status"), credentialSave: (value: string) => ipcRenderer.invoke("core:credential-save", value),
   connect: (username: string, mode?: string) => ipcRenderer.invoke("core:connect", username, mode), disconnect: () => ipcRenderer.invoke("core:disconnect"),

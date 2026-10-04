@@ -158,7 +158,7 @@ async function main() {
   const core = { onStatus: () => () => {}, onEvent: fn => { handleEvent = fn; return () => {}; },
     overlayShow: async args => { overlays.push(args); return { ok: true }; } };
   const { default: App } = loadTs('src/App.tsx', { react, './Updates': { default: () => null }, './giftActions': loadTs('src/giftActions.ts', {}), './types': { defaults }, './giftCatalog': gifts, './GiftPicker': { default: () => null }, './stickerCatalog': catalog, './StickerSounds': { default: () => null } }, {
-    React: react, window: { streamPulseCore: core }, crypto: require('node:crypto').webcrypto,
+    URL, React: react, window: { streamPulseCore: core }, crypto: require('node:crypto').webcrypto,
     Audio: class { constructor(url) { this.url = url; } async play() { sounds.push(this.url); soundVolumes.push(this.volume); } }
   });
   App();
@@ -168,6 +168,7 @@ async function main() {
   await handleEvent({ ...event, id: 'two', type: 'Join' });
   await handleEvent({ ...event, type: 'SuperFanJoin' });
   await handleEvent({ ...event, id: 'four', type: 'SuperFanJoin' });
+  assert.ok(overlays.every(a => a.channel === 'superfan'), 'Every Super Fan entrance targets the dedicated source');
   assert.equal(overlays.length, 4, 'Every entry announces, without double announcements for explicit SuperFanJoin');
   assert.equal(sounds.length, 4, 'Every Super Fan entrance starts its sound again');
   const entranceProvider = new TikToolProvider('test');

@@ -1,12 +1,13 @@
 # Release checklist
 
-1. Run `npm run release:check`. It builds the app, checks both TypeScript projects, and runs regression tests. Stop if any check fails.
+1. Run `npm run release:check`. It builds the app, checks both TypeScript projects, and runs regression tests, including hidden-browser overlay isolation/queues, GIF replay, HTTP fallback, and immediate settings flush. Stop if any check fails.
 2. Run `node_modules/.bin/electron tests/overlay-library-smoke.cjs` for hidden-browser rendering, queues, and transport fallback. Review the generated preview images.
 3. Bump package.json and package-lock.json together. Build into a new release-alphaN folder with `npm run dist:win -- --config.directories.output=release-alphaN --publish never`.
 4. Confirm packaged version, app-update.yml GitHub repository, installer size, and generated latest.yml SHA-512 against the exact installer.
 5. Upload source and installer, .blockmap and latest.yml to a draft GitHub prerelease. Publish only when all assets are present. Never rename the installer without regenerating metadata.
 6. Test from the previous installed version: check, download, cancel installation, confirm LIVE guard, then install while offline. Verify restart into the expected version, settings/rules preservation, and local/public overlay health. Record untested items explicitly.
-7. Confirm duplicate launch focuses the running app. Test a backup, a changed setting, and restore. Confirm the prior state remains available as a backup.
+7. Change a setting and immediately close/reopen the app. Verify it persisted. Stop the tunnel process and verify recovery and status updates; a temporary tunnel gets a new URL that must be copied into Studio. Repeated failures must pause after five retries.
+8. Confirm duplicate launch focuses the running app. Test a backup, a changed setting, and restore. Confirm the prior state remains available as a backup.
 
 ## Windows signing setup
 

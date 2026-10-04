@@ -1,3 +1,4 @@
+import { flushRendererSettings } from './settingsFlush';
 import { claimInstance } from './singleInstance';
 import { SettingsStore } from './settingsStore';
 import { probeOverlay } from './connectionHealth';
@@ -18,6 +19,20 @@ const primaryInstance = claimInstance(app, () => window);
 const settingsStore = new SettingsStore(app.getPath("userData"));
 let provider: LiveProvider | null = null;
 let closing = false;
+let closePending = false;
+async function flushSettings() { await flushRendererSettings(window); await settingsStore.flush(); }
+async function requestClose() {
+  if (closePending || closing) return;
+  closePending = true;
+  try {
+    try { await flushSettings(); }
+    catch (error) {
+      const result = await dialog.showMessageBox({type:'warning',title:'Settings were not saved',message:error instanceof Error ? error.message : 'Settings could not be saved.',buttons:['Keep StreamPulse open','Close without saving'],defaultId:0,cancelId:0});
+      if (result.response !== 1) return;
+    }
+    closing = true; await disconnect(); await stopSecureTunnel(); await stopOverlayServer(); app.quit();
+  } finally { closePending = false; }
+}
 let reconnectTimer: NodeJS.Timeout | null = null;
 let reconnectAttempts = 0;
 let activeUsername = "";
@@ -106,6 +121,7 @@ async function createWindow() {
   await startOverlayServer();
   await startSecureTunnel(await tunnelConfig());
   window = new BrowserWindow({ width: 1180, height: 780, minWidth: 940, minHeight: 620, backgroundColor: "#080c12", title: "StreamPulse Core", webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false, autoplayPolicy: "no-user-gesture-required" } });
+  window.on("close", event => { if (!closing) { event.preventDefault(); void requestClose(); } });
   window.on("closed", () => { window = null; });
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", event => event.preventDefault());
@@ -115,7 +131,7 @@ async function createWindow() {
 app.whenReady().then(async () => {
   if (!primaryInstance) return;
   try { await settingsStore.backup(`Startup ${app.getVersion()}`); } catch { diagnosticLog("Startup backup failed; settings file may need recovery."); }
-  setupUpdater(() => reconnectEnabled, async () => { await settingsStore.backup("Before update"); closing = true; await disconnect(); await stopSecureTunnel(); await stopOverlayServer(); });
+  setupUpdater(() => reconnectEnabled, async () => { await flushSettings(); await settingsStore.backup("Before update"); await disconnect(); await stopSecureTunnel(); await stopOverlayServer(); closing = true; });
   diagnosticLog(`StreamPulse ${app.getVersion()} started`);
   ipcMain.handle("core:gift-catalog", async () => ({ ok: false, error: "StreamPulse uses your saved gift library and automatically adds gifts received during LIVE. A full catalog download is not available through this connection." }));
   ipcMain.handle("core:diagnostics", async () => {
@@ -172,7 +188,7 @@ app.whenReady().then(async () => {
   });
   await createWindow();
 });
-app.on("before-quit", () => { closing = true; });
+app.on("before-quit", event => { if (primaryInstance && window && !closing) { event.preventDefault(); void requestClose(); } });
 app.on("window-all-closed", async () => { await disconnect(); await stopSecureTunnel(); await stopOverlayServer(); if (process.platform !== "darwin") app.quit(); });
 app.on("activate", () => { if (!closing && BrowserWindow.getAllWindows().length === 0) void createWindow(); });
 

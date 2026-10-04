@@ -87,6 +87,22 @@ connect();poll();
 window.addEventListener('online',()=>{connect();poll()});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){connect();poll()}});
 </script></body></html>`;
+function queuedOverlayHtml(channel = "") {
+  return overlayHtml.replace("function receive(d){", `const queue=[];let busy=false;
+function receive(d){
+  if(d.type!=='gift-alert'||(d.channel||'')!==${JSON.stringify(channel)}||(d.id&&seen.has(d.id)))return;
+  if(d.id){seen.add(d.id);if(seen.size>200)seen.delete(seen.values().next().value)}
+  if(queue.length>=20)queue.shift();queue.push(d);next();
+}
+function next(){
+  if(busy)return;
+  while(queue.length&&Date.now()-queue[0].createdAt>30000)queue.shift();
+  const d=queue.shift();if(!d)return;busy=true;
+  d.durationMs=Math.min(15000,Math.max(1000,Number(d.durationMs)||4000));render(d);
+  setTimeout(()=>{busy=false;next()},d.durationMs+300);
+}
+function render(d){`).replace("  if(d.type!=='gift-alert'||d.channel||(d.id&&seen.has(d.id)))return;", "");
+}
 function libraryHtml(kind: string) {
   return overlayHtml.replace('<body>', kind === 'gift-highlight' ? '<body class="banner">' : '<body>').replace("</style>", `
 .alert{box-sizing:border-box;top:50%;min-width:0;width:min(540px,90vw);padding:30px;border-color:var(--accent);box-shadow:0 0 55px color-mix(in srgb,var(--accent) 25%,transparent)}
@@ -131,7 +147,8 @@ export async function startOverlayServer(port = OVERLAY_PORT) {
     app.get("/fonts/PermanentMarker-Regular.ttf", (_req, res) => res.sendFile(path.join(__dirname, "../dist/fonts/PermanentMarker-Regular.ttf")));
     app.get("/health", (_req, res) => res.json({ ok: true, app: "StreamPulse Core" }));
     app.get("/overlay/likes", (_req, res) => res.set("Cache-Control", "no-store").type("html").send(likesOverlayHtml));
-    app.get("/overlay/gifts", (_req, res) => res.set("Cache-Control", "no-store").type("html").send(overlayHtml));
+    app.get("/overlay/superfans", (_req, res) => res.set("Cache-Control", "no-store").type("html").send(queuedOverlayHtml("superfan")));
+    app.get("/overlay/gifts", (_req, res) => res.set("Cache-Control", "no-store").type("html").send(queuedOverlayHtml()));
     app.get("/overlay/library/:kind", (req, res) => {
       if (!["like-pop", "gift-highlight"].includes(req.params.kind)) return res.sendStatus(404);
       res.set("Cache-Control", "no-store").type("html").send(libraryHtml(req.params.kind));
@@ -188,7 +205,7 @@ export async function showOverlayAlert(args: { title: string; body: string; imag
             imageError = `Could not read overlay image: ${error instanceof Error ? error.message : String(error)}`;
         }
     }
-    publishAlert({ channel: ["like-pop", "gift-highlight"].includes(args.channel || "") ? args.channel : undefined, accent: /^#[0-9a-f]{6}$/i.test(args.accent || "") ? args.accent : "#62ffd1", theme: ["glow", "minimal", "spotlight"].includes(args.theme || "") ? args.theme : "glow", title: args.title, body: args.body, imageUrl, durationMs: Math.min(15000, Math.max(1000, Number(args.durationMs || 5000))) });
+    publishAlert({ channel: ["like-pop", "gift-highlight", "superfan"].includes(args.channel || "") ? args.channel : undefined, accent: /^#[0-9a-f]{6}$/i.test(args.accent || "") ? args.accent : "#62ffd1", theme: ["glow", "minimal", "spotlight"].includes(args.theme || "") ? args.theme : "glow", title: args.title, body: args.body, imageUrl, durationMs: Math.min(15000, Math.max(1000, Number(args.durationMs || 5000))) });
     return { ok: !imageError, error: imageError || undefined };
 }
 function broadcast(data: unknown) {

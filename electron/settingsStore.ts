@@ -1,3 +1,4 @@
+import { validateSettings } from './settingsValidation';
 import fs from 'fs/promises';
 import path from 'path';
 import { randomUUID } from 'crypto';
@@ -8,11 +9,10 @@ export class SettingsStore {
   private get file() { return path.join(this.root, 'settings.json'); }
   private get directory() { return path.join(this.root, 'backups'); }
   private validate(value: unknown): Record<string, any> {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Settings must be an object.');
-    const state = value as Record<string, any>;
-    for (const key of ['reactions','giftActions','giftCatalog','stickerCatalog','stickerReactions','superFans']) if (key in state && !Array.isArray(state[key])) throw new Error(`Invalid ${key} settings.`);
-    return state;
+    return validateSettings(value);
   }
+  flush() { return this.serial(async () => {}); }
+
   private async read() { try { return this.validate(JSON.parse(await fs.readFile(this.file, 'utf8'))); } catch (e: any) { if (e.code === 'ENOENT') return {}; throw new Error('Settings could not be read. Restore a saved backup in Settings.'); } }
   load() { return this.serial(() => this.read()); }
   private async write(state: unknown) {

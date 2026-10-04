@@ -14,6 +14,8 @@ app.whenReady().then(async()=>{let win;try{
  await run("Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Restore selected backup').click()");
  await wait("Array.from(document.querySelectorAll('input')).some(i=>i.value==='AfterRestore')");
  await wait("window.streamPulseCore.testLastSave().username==='AfterRestore'");
+ await run(`(async()=>{const input=Array.from(document.querySelectorAll('input')).find(i=>i.value==='AfterRestore');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'ImmediateClose');input.dispatchEvent(new Event('input',{bubbles:true}));await new Promise(r=>setTimeout(r,0));await window.streamPulseCore.testFlush();})()`);
+ assert.equal(await run("window.streamPulseCore.testLastSave().username"),'ImmediateClose');
  assert.ok(await run("document.body.textContent.includes('Cloudflare process: Running')"));
- console.log('Passed: Settings renders health, creates a backup, restores settings, and autosaves the restored value.');
+ console.log('Passed: Settings renders health, creates a backup, restores settings, and autosaves the restored value, and flushes an immediate edit before the debounce.');
  }catch(e){console.error(e);process.exitCode=1;}finally{win?.destroy();app.exit(process.exitCode||0);}});
