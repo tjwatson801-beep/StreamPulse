@@ -2,7 +2,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs/promises'),os=req
 const {SettingsStore}=require('../dist-electron/settingsStore');
 (async()=>{
  const root=await fs.mkdtemp(path.join(os.tmpdir(),'streampulse-backup-test-'));const store=new SettingsStore(root);
- const original={username:'Test',giftActions:[{id:'rose',giftName:'Rose',enabled:true,minimumCount:1,kind:'webhook',message:'',soundPath:'',imagePath:'',volume:1,durationMs:4000,webhookUrl:'http://localhost:5730/wheel'}],reactions:[]};
+ const original={username:'Test',likesTextColor:'#123456',likesCountColor:'#abcdef',likesLeaderColor:'#fedcba',giftActions:[{id:'rose',giftName:'Rose',enabled:true,minimumCount:1,kind:'webhook',message:'',soundPath:'',imagePath:'',volume:1,durationMs:4000,webhookUrl:'http://localhost:5730/wheel'}],reactions:[]};
  await store.save(original);const id=await store.backup('Manual test');
  await Promise.all([store.save({...original,username:'First'}),store.save({...original,username:'Last'})]);
  assert.equal((await store.load()).username,'Last');

@@ -36,6 +36,13 @@ export default function LikeRankings({ overlayUrl, secure, settings, update }: {
     <section className="card form"><h2>Overlay appearance</h2>
       <label>Font<select value={settings.likesFont} onChange={event => update(current => ({ ...current, likesFont: event.target.value }))}>{["Segoe UI", "Permanent Marker", "Arial", "Verdana", "Trebuchet MS", "Georgia", "Courier New"].map(font => <option key={font} value={font}>{font === "Permanent Marker" ? "Graffiti · Permanent Marker" : font}</option>)}</select></label>
       <small>Permanent Marker adds a graffiti-style look to headings and names. Counts stay in a clear, easy-to-read font.</small>
+      <div className="row">
+        <label>Names and labels<input type="color" value={settings.likesTextColor} onChange={event => update(current => ({ ...current, likesTextColor: event.target.value }))}/></label>
+        <label>Like counts<input type="color" value={settings.likesCountColor} onChange={event => update(current => ({ ...current, likesCountColor: event.target.value }))}/></label>
+        <label>Top supporter<input type="color" value={settings.likesLeaderColor} onChange={event => update(current => ({ ...current, likesLeaderColor: event.target.value }))}/></label>
+      </div>
+      <small>Top supporter color applies to the leading name and count, including ties. Choose dark colors over a light scene or bright colors over a dark scene.</small>
+      <button onClick={() => update(current => ({ ...current, likesTextColor: "#effff9", likesCountColor: "#effff9", likesLeaderColor: "#ffe2a0" }))}>Reset font colors</button>
       <label>Text size: {settings.likesTextScale}%<input type="range" min="75" max="150" step="5" value={settings.likesTextScale} onChange={event => update(current => ({ ...current, likesTextScale: Number(event.target.value) }))}/></label>
       <label>Overlay width: {settings.likesWidth}px<input type="range" min="320" max="800" step="20" value={settings.likesWidth} onChange={event => update(current => ({ ...current, likesWidth: Number(event.target.value) }))}/></label>
       <small>Use the recommended browser-source dimensions above after resizing. Long names shorten to fit.</small>

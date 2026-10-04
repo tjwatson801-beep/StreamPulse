@@ -76,6 +76,16 @@ app.whenReady().then(async () => {
     assert.match(await win.webContents.executeJavaScript("getComputedStyle(document.body).fontFamily"), /Segoe UI/);
     setLikesAppearance({});
     await waitFor("getComputedStyle(document.querySelector('h1')).fontSize === '27px'");
+    setLikesAppearance({ likesTextColor: '#123456', likesCountColor: '#abcdef', likesLeaderColor: '#fedcba' });
+    await waitFor("getComputedStyle(document.querySelector('h1')).color === 'rgb(18, 52, 86)'");
+    assert.equal(await win.webContents.executeJavaScript("getComputedStyle(document.querySelector('#total')).color"), 'rgb(171, 205, 239)');
+    assert.equal(await win.webContents.executeJavaScript("getComputedStyle(document.querySelector('li.is-leader .name')).color"), 'rgb(254, 220, 186)');
+    assert.equal(await win.webContents.executeJavaScript("getComputedStyle(document.querySelector('li.is-leader .count')).color"), 'rgb(254, 220, 186)');
+    await win.reload();
+    await waitFor("document.querySelector('li:not(.is-leader) .count') && getComputedStyle(document.querySelector('li:not(.is-leader) .count')).color === 'rgb(171, 205, 239)'");
+    setLikesAppearance({ likesTextColor: 'red;display:none', likesCountColor: null, likesLeaderColor: '#bad' });
+    await waitFor("getComputedStyle(document.querySelector('h1')).color === 'rgb(239, 255, 249)'");
+    assert.equal(await win.webContents.executeJavaScript("getComputedStyle(document.querySelector('li.is-leader .count')).color"), 'rgb(255, 226, 160)');
     setLikesAppearance({ likesFont: "Permanent Marker" });
     await waitFor("document.documentElement.classList.contains('graffiti')");
     await win.webContents.executeJavaScript("document.fonts.load('20px \"Permanent Marker\"')");

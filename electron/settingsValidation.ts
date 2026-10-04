@@ -26,7 +26,7 @@ const schemas: Record<string, Schema> = {
 };
 export function validateSettings(value: unknown): Record<string, any> {
   const state = fields(value, {
-    ...str('username likesFont voiceURI chatTemplate followTemplate followSoundPath superFanTemplate superFanImagePath superFanSoundPath permanentOverlayHostname defaultGiftTemplate ttsBlockedPhrases'),
+    ...str('username likesTextColor likesCountColor likesLeaderColor likesFont voiceURI chatTemplate followTemplate followSoundPath superFanTemplate superFanImagePath superFanSoundPath permanentOverlayHostname defaultGiftTemplate ttsBlockedPhrases'),
     ...bool('likesShowBorder ttsEnabled followEnabled superFanEnabled stickerSoundsEnabled ttsSkipLinks ttsSkipCommands giftReactionsEnabled giftCatalogSample'),
     ...num('likesTextScale likesWidth likesBackgroundOpacity volume rate pitch superFanDurationMs giftCatalogUpdatedAt'),
     connectionProvider:['direct','tikfinity'], audience:['everyone','followers','subscribers']

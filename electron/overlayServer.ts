@@ -19,10 +19,12 @@ export function processLibraryEvent(event: LiveEvent, before = 0, after = 0) {
 }
 let likesTimer: ReturnType<typeof setTimeout> | null = null;
 export function publishLikes() { if (likesTimer) return; likesTimer = setTimeout(() => { likesTimer = null; broadcast(likesTracker.snapshot()); }, 250); }
-let likesAppearance = { type: "likes-appearance", opacity: 95, border: true, font: "Segoe UI", textScale: 100, width: 480 };
-export function setLikesAppearance(state: { likesBackgroundOpacity?: unknown; likesShowBorder?: unknown; likesFont?: unknown; likesTextScale?: unknown; likesWidth?: unknown; overlayLibrary?: unknown; giftCatalog?: unknown }) {
+const likesColor = (value: unknown, fallback: string) => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
+let likesAppearance = { type: "likes-appearance", opacity: 95, border: true, font: "Segoe UI", textScale: 100, width: 480, textColor: "#effff9", countColor: "#effff9", leaderColor: "#ffe2a0" };
+export function setLikesAppearance(state: { likesTextColor?: unknown; likesCountColor?: unknown; likesLeaderColor?: unknown; likesBackgroundOpacity?: unknown; likesShowBorder?: unknown; likesFont?: unknown; likesTextScale?: unknown; likesWidth?: unknown; overlayLibrary?: unknown; giftCatalog?: unknown }) {
     overlayLibrary.configure(state.overlayLibrary, state.giftCatalog);
     likesAppearance = { type: "likes-appearance",
+        textColor: likesColor(state.likesTextColor, "#effff9"), countColor: likesColor(state.likesCountColor, "#effff9"), leaderColor: likesColor(state.likesLeaderColor, "#ffe2a0"),
         opacity: typeof state.likesBackgroundOpacity === "number" && Number.isFinite(state.likesBackgroundOpacity) ? Math.max(0, Math.min(100, state.likesBackgroundOpacity)) : 95,
         font: typeof state.likesFont === "string" && ["Segoe UI", "Permanent Marker", "Arial", "Verdana", "Trebuchet MS", "Georgia", "Courier New"].includes(state.likesFont) ? state.likesFont : "Segoe UI",
         textScale: typeof state.likesTextScale === "number" && Number.isFinite(state.likesTextScale) ? Math.max(75, Math.min(150, state.likesTextScale)) : 100,
