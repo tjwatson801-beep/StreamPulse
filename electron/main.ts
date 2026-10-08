@@ -4,7 +4,9 @@ import { SettingsStore } from './settingsStore';
 import { probeOverlay } from './connectionHealth';
 import { setupUpdater } from './updater';
 import { sendWebhook } from './webhook';
-import { app, BrowserWindow, dialog, ipcMain, safeStorage } from "electron";
+import { scanSounds, SoundHotkeys } from "./soundLibrary";
+import { homedir } from "os";
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, globalShortcut } from "electron";
 import fs from "fs/promises";
 import { appendFileSync, existsSync, mkdirSync, statSync, renameSync, rmSync } from "fs";
 import path from "path";
@@ -17,6 +19,8 @@ import { extractTunnelToken, getSecureOverlayInfo, normalizeHostname, restartSec
 let window: BrowserWindow | null = null;
 const primaryInstance = claimInstance(app, () => window);
 const settingsStore = new SettingsStore(app.getPath("userData"));
+const soundHotkeys = new SoundHotkeys(globalShortcut, soundPath => send('core:sound-hotkey', soundPath));
+app.on('will-quit', () => soundHotkeys.clear());
 let provider: LiveProvider | null = null;
 let closing = false;
 let closePending = false;
@@ -172,7 +176,15 @@ app.whenReady().then(async () => {
   ipcMain.handle("core:mock", async (_event, kind: "Chat" | "Gift" | "Follow" | "SuperFanJoin") => { const base = { id: crypto.randomUUID(), user: "GoldFan", time: new Date().toLocaleTimeString(), followRole: 2, isFollower: true, isSubscriber: false }; const event: LiveEvent = kind === "Chat" ? { ...base, type: "Chat", detail: "Hello StreamPulse!" } : kind === "Gift" ? { ...base, type: "Gift", detail: "sent Rose", giftName: "Rose", giftImageUrl: "https://cdn.tik.tools/gifts/dca13c81e1bc524a3d2388b5.png", count: 5, comboComplete: true } : kind === "Follow" ? { ...base, type: "Follow", detail: "followed the LIVE" } : { ...base, type: "SuperFanJoin", detail: "entered as a Super Fan" }; send("core:event", event); return { ok: true }; });
   ipcMain.handle("core:overlay-test", async (_event, body: string) => showOverlayAlert({ title: "Rose received!", body, imageUrl: "https://cdn.tik.tools/gifts/dca13c81e1bc524a3d2388b5.png" }));
   ipcMain.handle("core:overlay-show", async (_event, args: { title: string; body: string; imagePath?: string; imageUrl?: string; durationMs?: number }) => showOverlayAlert(args));
-  ipcMain.handle("core:pick-sound", async () => { const result = await dialog.showOpenDialog({ title: "Choose an event sound", properties: ["openFile"], filters: [{ name: "Audio", extensions: ["mp3", "wav", "ogg", "m4a", "aac"] }] }); return result.canceled ? null : result.filePaths[0] || null; });
+  ipcMain.handle('core:sound-library', async (_event, folder: unknown) => {
+    if (typeof folder !== 'string') throw Error('Invalid Sounds folder.');
+    const directory = folder || path.join(homedir(), 'Documents', 'StreamPulse', 'Sounds');
+    try { return await scanSounds(directory); }
+    catch (error: any) { if (error.code === 'ENOENT') throw Error('Sounds folder not found. Choose your Sounds folder.'); throw error; }
+  });
+  ipcMain.handle('core:pick-sound-folder', async () => { const result = await dialog.showOpenDialog({ title: 'Choose your Sounds folder', properties: ['openDirectory'] }); return result.canceled ? null : result.filePaths[0] || null; });
+  ipcMain.handle('core:sound-hotkeys', (_event, clips: unknown) => soundHotkeys.configure(clips));
+  ipcMain.handle("core:pick-sound", async () => { const result = await dialog.showOpenDialog({ title: "Choose an event sound", properties: ["openFile"], filters: [{ name: "Audio", extensions: ["mp3", "wav", "ogg", "m4a", "aac", "flac", "webm"] }] }); return result.canceled ? null : result.filePaths[0] || null; });
   ipcMain.handle("core:pick-image", async () => { const result = await dialog.showOpenDialog({ title: "Choose an overlay image", properties: ["openFile"], filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp"] }] }); return result.canceled ? null : result.filePaths[0] || null; });
   ipcMain.handle("core:info", async () => { const secure = getSecureOverlayInfo(); return { version: app.getVersion(), overlayUrl: secure.overlayUrl || `http://localhost:${OVERLAY_PORT}/overlay/gifts?v=24-repeat`, secure }; });
   ipcMain.handle("core:tunnel-restart", async () => { const secure = await restartSecureTunnel(await tunnelConfig()); return { ...secure, overlayUrl: secure.overlayUrl || `http://localhost:${OVERLAY_PORT}/overlay/gifts?v=24-repeat` }; });

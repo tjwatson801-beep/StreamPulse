@@ -157,9 +157,10 @@ async function main() {
   };
   const core = { onStatus: () => () => {}, onEvent: fn => { handleEvent = fn; return () => {}; },
     overlayShow: async args => { overlays.push(args); return { ok: true }; } };
-  const { default: App } = loadTs('src/App.tsx', { react, './Updates': { default: () => null }, './giftActions': loadTs('src/giftActions.ts', {}), './types': { defaults }, './giftCatalog': gifts, './GiftPicker': { default: () => null }, './stickerCatalog': catalog, './StickerSounds': { default: () => null } }, {
+  const TestAudio = class { constructor(url) { this.url = url; } async play() { sounds.push(this.url); soundVolumes.push(this.volume); } pause() {} };
+  const { default: App } = loadTs('src/App.tsx', { react, './soundPlayback': loadTs('src/soundPlayback.ts', {}, { setTimeout: () => 1, clearTimeout: () => {}, Audio: TestAudio }), './Updates': { default: () => null }, './giftActions': loadTs('src/giftActions.ts', {}), './types': { defaults }, './giftCatalog': gifts, './GiftPicker': { default: () => null }, './stickerCatalog': catalog, './StickerSounds': { default: () => null } }, {
     URL, React: react, window: { streamPulseCore: core }, crypto: require('node:crypto').webcrypto,
-    Audio: class { constructor(url) { this.url = url; } async play() { sounds.push(this.url); soundVolumes.push(this.volume); } }
+    Audio: TestAudio
   });
   App();
   effects.find(fn => fn.toString().includes('onStatus'))();

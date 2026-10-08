@@ -18,6 +18,7 @@ const str = (keys: string): Schema => Object.fromEntries(keys.split(' ').map(k =
 const num = (keys: string): Schema => Object.fromEntries(keys.split(' ').map(k => [k, 'number']));
 const bool = (keys: string): Schema => Object.fromEntries(keys.split(' ').map(k => [k, 'boolean']));
 const schemas: Record<string, Schema> = {
+  soundClips: {...str('path name tags hotkey'), ...bool('favorite')},
   reactions: {...str('id giftName message soundPath?'), ...bool('speak overlay enabled?'), ...num('volume?')},
   giftActions: {...str('id giftName message soundPath imagePath webhookUrl? webhookBody?'), ...bool('enabled'), ...num('minimumCount volume durationMs'), kind:['sound','tts','overlay','webhook'], 'webhookMethod?':['GET','POST']},
   superFans: {...str('id username message imagePath soundPath'), ...bool('enabled'), ...num('durationMs')},
@@ -26,16 +27,17 @@ const schemas: Record<string, Schema> = {
 };
 export function validateSettings(value: unknown): Record<string, any> {
   const state = fields(value, {
-    ...str('username likesTextColor likesCountColor likesLeaderColor likesFont voiceURI chatTemplate followTemplate followSoundPath superFanTemplate superFanImagePath superFanSoundPath permanentOverlayHostname defaultGiftTemplate ttsBlockedPhrases'),
+    ...str('soundLibraryFolder username likesTextColor likesCountColor likesLeaderColor likesFont voiceURI chatTemplate followTemplate followSoundPath superFanTemplate superFanImagePath superFanSoundPath permanentOverlayHostname defaultGiftTemplate ttsBlockedPhrases'),
     ...bool('likesShowBorder ttsEnabled followEnabled superFanEnabled stickerSoundsEnabled ttsSkipLinks ttsSkipCommands giftReactionsEnabled giftCatalogSample'),
-    ...num('likesTextScale likesWidth likesBackgroundOpacity volume rate pitch superFanDurationMs giftCatalogUpdatedAt'),
-    connectionProvider:['direct','tikfinity'], audience:['everyone','followers','subscribers']
+    ...num('soundMasterVolume likesTextScale likesWidth likesBackgroundOpacity volume rate pitch superFanDurationMs giftCatalogUpdatedAt'),
+    soundPlaybackMode:['overlap','queue','interrupt'], connectionProvider:['direct','tikfinity'], audience:['everyone','followers','subscribers']
   }, 'settings', true);
   for (const [key,schema] of Object.entries(schemas)) {
     if (!(key in state)) continue;
     if (!Array.isArray(state[key])) throw Error(`Invalid ${key}: expected a list.`);
     state[key].forEach((entry: unknown, index: number) => fields(entry, schema, `${key}[${index}]`));
   }
+  if ('soundMasterVolume' in state && (state.soundMasterVolume < 0 || state.soundMasterVolume > 1)) throw Error('Invalid sound master volume.');
   if ('overlayLibrary' in state) {
     const library = object(state.overlayLibrary, 'overlayLibrary');
     for (const key of ['likes','gifts']) fields(library[key], {
