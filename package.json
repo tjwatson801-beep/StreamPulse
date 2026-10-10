@@ -1,6 +1,6 @@
 {
   "name": "streampulse-core",
-  "version": "0.1.0-alpha.50",
+  "version": "0.1.0-alpha.51",
   "private": true,
   "description": "StreamPulse Core - focused TikTok LIVE Studio reactions and TTS",
   "author": "StreamPulse",
@@ -47,7 +47,7 @@
       "dist-electron/**/*",
       "package.json"
     ],
-    "extraResources": [{"from":"resources/transcribe.py","to":"transcribe.py"},
+    "extraResources": [{"from":"resources/visual-ocr.ps1","to":"visual-ocr.ps1"},{"from":"resources/transcribe.py","to":"transcribe.py"},
       {
         "from": "resources/cloudflared.exe",
         "to": "cloudflared.exe"
@@ -81,7 +81,3 @@
     ]
   }
 }
-
-
-
-

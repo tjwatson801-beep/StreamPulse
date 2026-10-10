@@ -7,6 +7,7 @@ import path from 'path';
 import { randomUUID } from 'crypto';
 import { AudioEnergy, discoverVideoTools, hasVideoTools, suggestAudioHighlights, videoBinary } from './videoTools';
 import { captionAss, ClipEditing, framingFilter, validateEditing } from './videoEditing';
+import { setupMomentEngine } from './momentEngine';
 
 export function validateClip(start: unknown, end: unknown, duration: number) {
   if (typeof start !== 'number' || typeof end !== 'number' || !Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end > duration + 0.05) throw Error('Choose a valid start and end within the recording.');
@@ -31,27 +32,28 @@ export function setupVideoEngine() {
     await fs.writeFile(speechConfig,JSON.stringify({python:python.filePaths[0],runtime:runtime.filePaths[0]}));
     return runtime.filePaths[0];
   });
+  async function speechWords(sourcePath:string,start:number,length:number) {
+    let config:{python:string;runtime:string};
+    try{config=JSON.parse(await fs.readFile(speechConfig,'utf8'));}catch{throw Error('Set up local captions first. Choose your Python executable and speech runtime folder.');}
+      await loadFolder();
+      const worker=app.isPackaged?path.join(process.resourcesPath,'transcribe.py'):path.join(__dirname,'..','resources','transcribe.py');
+      const output=await new Promise<string>((resolve,reject)=>{
+        const child=spawn(config.python,[worker,tool('ffmpeg'),sourcePath,String(start),String(length),config.runtime],{windowsHide:true,shell:false,env:{...process.env,PYTHONPATH:path.join(config.runtime,'speech-libs')}});
+        active=child;let out='',err='';
+        child.stdout.on('data',c=>out=(out+c).slice(-2000000));child.stderr.on('data',c=>err=(err+c).slice(-4000));
+        child.on('error',()=>reject(Error('Python could not start. Set up local captions again.')));
+        child.on('close',code=>{if(active===child)active=null;if(cancelled)reject(Error('Captions cancelled.'));else if(code!==0)reject(Error('Local captions failed: '+err.slice(-1200)));else resolve(out);});
+      });
+      const words=JSON.parse(output);validateEditing({captions:words},length);return words;
+  }
   ipcMain.handle('video:transcribe', async (_event, args:{id:string;start:number;end:number}) => {
     if(busy)throw Error('A video job is already running.');
     const source=recordings.get(args?.id);
     if(!source?.hasAudio)throw Error('Import a recording with audio first.');
     const clip=validateClip(args.start,args.end,source.duration);
     if(clip.length>600)throw Error('Select a clip of 10 minutes or less for captions.');
-    let config:{python:string;runtime:string};
-    try{config=JSON.parse(await fs.readFile(speechConfig,'utf8'));}catch{throw Error('Set up local captions first. Choose your Python executable and speech runtime folder.');}
     busy=true;cancelled=false;
-    try {
-      await loadFolder();
-      const worker=app.isPackaged?path.join(process.resourcesPath,'transcribe.py'):path.join(__dirname,'..','resources','transcribe.py');
-      const output=await new Promise<string>((resolve,reject)=>{
-        const child=spawn(config.python,[worker,tool('ffmpeg'),source.path,String(clip.start),String(clip.length),config.runtime],{windowsHide:true,shell:false,env:{...process.env,PYTHONPATH:path.join(config.runtime,'speech-libs')}});
-        active=child;let out='',err='';
-        child.stdout.on('data',c=>out=(out+c).slice(-2000000));child.stderr.on('data',c=>err=(err+c).slice(-4000));
-        child.on('error',()=>reject(Error('Python could not start. Set up local captions again.')));
-        child.on('close',code=>{if(active===child)active=null;if(cancelled)reject(Error('Captions cancelled.'));else if(code!==0)reject(Error('Local captions failed: '+err.slice(-1200)));else resolve(out);});
-      });
-      const words=JSON.parse(output);validateEditing({captions:words},clip.length);return words;
-    } finally {busy=false;}
+    try{return await speechWords(source.path,clip.start,clip.length);}finally{busy=false;}
   });
   async function loadFolder() {
     if (folderLoaded) return;
@@ -226,6 +228,7 @@ export function setupVideoEngine() {
       return outputPath;
     } finally { busy = false; if (temporary) await fs.unlink(temporary).catch(() => {}); if(subtitleDirectory)await fs.rm(subtitleDirectory,{recursive:true,force:true}).catch(()=>{}); }
   });
+  setupMomentEngine({recordings,run,speechWords,tool,loadFolder,begin:()=>{if(busy)throw Error('A video job is already running.');busy=true;cancelled=false;},finish:()=>{busy=false;},check:()=>{if(cancelled)throw Error('Video job cancelled.');},setActive:child=>{active=child;}});
   app.on('will-quit', () => {cancelled = true; active?.kill(); server?.close();});
   return {isBusy: () => busy};
 }

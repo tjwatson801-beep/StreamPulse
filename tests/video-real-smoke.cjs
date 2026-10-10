@@ -43,14 +43,14 @@ app.whenReady().then(async()=>{
   await run("Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Find audio highlights').click()");
   await wait("document.body.textContent.includes('Review moment 1')");
   await run("Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Review moment 1').click()");
-  assert.ok(await run("Number(Array.from(document.querySelectorAll('input[type=number]'))[0].value)<=21 && Number(Array.from(document.querySelectorAll('input[type=number]'))[1].value)>=18"));
-  async function inputs(start,end){await run(`(()=>{const inputs=Array.from(document.querySelectorAll('input[type=number]'));for(const [i,value] of [[0,${start}],[1,${end}]]){Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(inputs[i],String(value));inputs[i].dispatchEvent(new Event('input',{bubbles:true}));}})()`);}
+  assert.ok(await run("Number([document.querySelector('input[aria-label=\"Clip start seconds\" ]'),document.querySelector('input[aria-label=\"Clip end seconds\" ]')][0].value)<=21 && Number([document.querySelector('input[aria-label=\"Clip start seconds\" ]'),document.querySelector('input[aria-label=\"Clip end seconds\" ]')][1].value)>=18"));
+  async function inputs(start,end){await run(`(()=>{const inputs=[document.querySelector('input[aria-label=\"Clip start seconds\" ]'),document.querySelector('input[aria-label=\"Clip end seconds\" ]')];for(const [i,value] of [[0,${start}],[1,${end}]]){Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(inputs[i],String(value));inputs[i].dispatchEvent(new Event('input',{bubbles:true}));}})()`);}
   await inputs(4.125,6.125);
   await run("Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Play selected clip').click()");
   await wait("document.querySelector('video').paused && document.querySelector('video').currentTime>=6.125");
   for(const framing of ['original','fit','crop']){
    output=path.join(root,framing+'.mp4');
-   await run(`(()=>{const select=document.querySelector('main select');Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(select,${JSON.stringify(framing)});select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+   await run(`(()=>{const select=Array.from(document.querySelectorAll('main select')).find(s=>s.querySelector('option[value="original"]'));Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(select,${JSON.stringify(framing)});select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
    await run("Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Export MP4').click()");
    await wait(`document.body.textContent.includes(${JSON.stringify('Clip saved: '+output)})`);
    const probe=JSON.parse(await command(binary('ffprobe'),['-v','error','-show_format','-show_streams','-of','json',output]));
@@ -76,6 +76,31 @@ app.whenReady().then(async()=>{
     await command(binary('ffmpeg'),['-v','error','-i',output,'-f','null','-']);
     console.log('Local speech captions and camera-focus export passed with real Neo Joins footage.');
   }
+  // Visual OCR, multi-source search and montage exports through the production preload.
+  const visualSource=path.join(root,'visual-cue.mp4');
+  await command(binary('ffmpeg'),['-v','error','-f','lavfi','-i','color=c=black:s=640x360:r=12','-vf',"drawtext=fontfile='C\\:/Windows/Fonts/arialbd.ttf':text='VICTORY ROYALE':fontsize=40:fontcolor=white:x=(w-tw)/2:y=(h-th)/2",'-t','4','-c:v','libx264','-preset','ultrafast',visualSource]);
+  selected=visualSource;const visualRecording=await run('window.streamPulseCore.video.import()');
+  const options={spoken:false,audio:false,visual:true,cues:[],before:1,after:2,region:{x:0,y:0,width:1,height:1}};
+  const visualResults=await run(`window.streamPulseCore.video.search(${JSON.stringify({id:visualRecording.id,options})})`);
+  assert.ok(visualResults.highlights.some(m=>m.categories.includes('win')),JSON.stringify(visualResults));
+  assert.equal(visualResults.highlights.length,1,'Persistent victory banner deduplicated');
+  selected=root;
+  const montage=await run(`window.streamPulseCore.video.montage(${JSON.stringify({id:visualRecording.id,clips:[{start:0,end:1,category:'win'},{start:2,end:4,category:'general'}],target:15,versions:3,cameraFocus:false,audioPolish:true,captions:false,font:'Bauhaus 93',wordHighlight:true})})`);
+  assert.equal(montage.length,2,'Duplicate alternating version skipped');
+  for(const file of montage){const p=JSON.parse(await command(binary('ffprobe'),['-v','error','-show_format','-show_streams','-of','json',file]));assert.ok(Math.abs(Number(p.format.duration)-3)<0.2);assert.equal(p.streams[0].width,1080);assert.ok(p.streams.some(s=>s.codec_type==='audio'));await command(binary('ffmpeg'),['-v','error','-i',file,'-f','null','-']);}
+  const general=await run(`window.streamPulseCore.video.search(${JSON.stringify({id:vertical.id,options:{...options,visual:false,audio:true}})})`);assert.ok(Array.isArray(general.highlights));
+  if(process.env.STREAMPULSE_SPEECH_ROOT){
+
+    // The existing speech-video import above remains in the recording registry.
+    selected=process.env.STREAMPULSE_SPEECH_VIDEO;const speech=await run('window.streamPulseCore.video.import()');
+    const cues=await run(`window.streamPulseCore.video.search(${JSON.stringify({id:speech.id,options:{...options,visual:false,spoken:true,cues:[{phrase:'big baller',category:'general'}]}})})`);
+    assert.ok(cues.highlights.some(m=>m.sources.includes('spoken')),JSON.stringify(cues));
+    selected=root;
+    const captionedMontage=await run(`window.streamPulseCore.video.montage(${JSON.stringify({id:speech.id,clips:[{start:0,end:4,category:'general'}],target:15,versions:1,cameraFocus:true,audioPolish:true,captions:true,font:'Bauhaus 93',wordHighlight:true})})`);
+    assert.equal(captionedMontage.length,1);await command(binary('ffmpeg'),['-v','error','-i',captionedMontage[0],'-f','null','-']);
+    console.log('Real spoken-cue search and captioned camera-focus montage passed.');
+  }
+  console.log('Visual OCR search, audio search, deduplication and real montage exports passed.');
   // Exercise backend paths through the actual preload as well as UI clicks.
   selected=silent;const noAudio=await run('window.streamPulseCore.video.import()');assert.equal(noAudio.hasAudio,false);
   const noSuggestions=await run(`window.streamPulseCore.video.analyze(${JSON.stringify(noAudio.id)})`);assert.equal(noSuggestions.highlights.length,0);

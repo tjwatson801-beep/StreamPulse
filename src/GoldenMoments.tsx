@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import MomentWorkflow, {MontageCut,SearchMoment} from './MomentWorkflow';
 
 export type Recording = {id: string; name: string; duration: number; width: number; height: number; hasAudio: boolean; url: string};
-type Highlight = {start: number; end: number; peakAt: number; levelDb: number; reason: string};
+type Highlight = SearchMoment;
 type CaptionWord = {start:number; end:number; text:string};
 function timestamp(seconds: number) {
   const ms = Math.max(0, Math.round(seconds * 1000));
@@ -13,6 +14,8 @@ export type VideoApi = {
   tools: () => Promise<string | null>;
   import: () => Promise<Recording | null>;
   speechTools: () => Promise<string|null>;
+  search: (args:unknown) => Promise<{highlights:SearchMoment[];message:string}>;
+  montage: (args:unknown) => Promise<string[]|null>;
   transcribe: (args:{id:string;start:number;end:number}) => Promise<CaptionWord[]>;
   export: (args: {id: string; start: number; end: number; framing: string; editing?:{cameraFocus:boolean;audioPolish:boolean;captions:CaptionWord[];font:string;wordHighlight:boolean}}) => Promise<string | null>;
   cancel: () => Promise<void>;
@@ -33,6 +36,7 @@ export default function GoldenMoments() {
   const [analyzing, setAnalyzing] = useState(false);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [reviewedMoment,setReviewedMoment]=useState<number|null>(null);
+  const [cuts,setCuts]=useState<MontageCut[]>([]),[momentFilter,setMomentFilter]=useState('all');
   const [toolsStatus, setToolsStatus] = useState('Checking video tools…');
   const [progress, setProgress] = useState(0), [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -67,14 +71,16 @@ export default function GoldenMoments() {
     <header><div><small>RECORDING TO CLIP</small><h1>Golden Moments</h1><p>Find a moment, trim it, and export a shareable MP4.</p></div></header>
     <section className="card form">
       <p role="status">{toolsStatus}</p>
-      <div className="row"><button disabled={busy} onClick={() => action(async () => { const item = await api!.import(); if (item) {setRecording(item); setHighlights([]); setReviewedMoment(null); setCaptions([]); setCameraFocus(false); setStart(0); setEnd(Math.min(30, item.duration)); playingClip.current = false;} })}>Import recording</button><button disabled={busy} onClick={() => action(async () => { const folder = await api!.tools(); if (folder) {setToolsStatus('Video tools ready'); setMessage('Video tools folder saved for future sessions.');} })}>Choose video tools folder</button></div>
+      <div className="row"><button disabled={busy} onClick={() => action(async () => { const item = await api!.import(); if (item) {setRecording(item); setCuts([]); setMomentFilter("all"); setHighlights([]); setReviewedMoment(null); setCaptions([]); setCameraFocus(false); setStart(0); setEnd(Math.min(30, item.duration)); playingClip.current = false;} })}>Import recording</button><button disabled={busy} onClick={() => action(async () => { const folder = await api!.tools(); if (folder) {setToolsStatus('Video tools ready'); setMessage('Video tools folder saved for future sessions.');} })}>Choose video tools folder</button></div>
       <small>Recordings are processed on this computer. MP4, MOV, MKV and WebM can be imported; preview support depends on the video codec.</small>
       {error && <p className="warning" role="alert">{error}</p>}
       {message && <p role="status">{message}</p>}
       {recording && <>
         <h2>{recording.name}</h2><small>{recording.width} × {recording.height} · {recording.duration.toFixed(1)} seconds</small>
+        <MomentWorkflow key={recording.id} recording={recording} api={api} busy={busy} action={action} found={m=>{setHighlights(m);setReviewedMoment(null);setMomentFilter('all');}} current={{start,end}} cuts={cuts} setCuts={setCuts} style={{cameraFocus,audioPolish,font,wordHighlight}} setMessage={setMessage} setAnalyzing={setAnalyzing} setProgress={setProgress}/>
+        <label>Show moments<select value={momentFilter} disabled={busy} onChange={e=>setMomentFilter(e.target.value)}><option value="all">All methods</option><option value="kill">Kills</option><option value="multi-kill">Multi-kills</option><option value="win">Wins</option><option value="general">General highlights</option><option value="spoken">Spoken cues</option><option value="visual">Visual cues</option><option value="audio">Audio peaks</option></select></label>
         <div className="row"><button disabled={busy || !recording.hasAudio} onClick={() => action(async () => {setAnalyzing(true); setProgress(0); const result=await api!.analyze(recording.id); setHighlights(result.highlights); setReviewedMoment(null); setMessage(result.message);})}>Find audio highlights</button><small>{recording.hasAudio ? 'Long streams use overlapping 15-minute sections, with up to 64 distinct moments. Short clips suggest up to 8. Review them for context.' : 'No audio track — choose a clip manually.'}</small></div>
-        {highlights.map((item,index) => <div className="row" key={item.peakAt}><button disabled={busy} onClick={() => {setReviewedMoment(index);setStart(item.start);setEnd(item.end);playingClip.current=false;if(player.current){player.current.pause();player.current.currentTime=item.start;}}}>Review moment {index+1}</button><small>{item.start.toFixed(1)}–{item.end.toFixed(1)} sec · peak at {item.peakAt}s · {item.reason}</small></div>)}
+        {highlights.map((item,index) => (momentFilter === "all" || (item.categories || ["general"]).includes(momentFilter) || (item.sources || ["audio"]).includes(momentFilter)) && <div className="row" key={item.peakAt}><button disabled={busy} onClick={() => {setReviewedMoment(index);setStart(item.start);setEnd(item.end);playingClip.current=false;if(player.current){player.current.pause();player.current.currentTime=item.start;}}}>Review moment {index+1}</button><small>{item.start.toFixed(1)}–{item.end.toFixed(1)} sec · {(item.categories || ["general"]).join(" + ")} · {(item.sources || ["audio"]).join(" + ")} · {item.reason}</small></div>)}
         <div className="golden-preview"><video key={recording.id} ref={player} src={recording.url} controls style={previewStyle} onError={() => setError('This codec cannot be previewed here. Try an H.264 MP4 recording; export may still work.')} onTimeUpdate={() => { if (playingClip.current && player.current && player.current.currentTime >= end) {player.current.pause(); playingClip.current = false;} }}/><output className="golden-timecode" aria-label="Current playback timestamp">{timestamp(playhead)} · {playhead.toFixed(3)}s<small className="golden-review-label" aria-label="Moment being reviewed">{reviewedMoment === null ? "Manual clip" : `Moment ${reviewedMoment+1} of ${highlights.length}${highlights[reviewedMoment] && (start !== highlights[reviewedMoment].start || end !== highlights[reviewedMoment].end) ? " · adjusted cut" : ""}`} · {recording.name}</small></output></div>
         <div className="golden-timeline"><div className="row"><strong>{timestamp(playhead)}</strong><small>of {timestamp(recording.duration)}</small></div><input aria-label="Recording playhead" type="range" min={0} max={recording.duration} step={0.001} value={playhead} disabled={busy} onChange={e=>seek(Number(e.target.value))}/><div className="row"><button disabled={busy} onClick={()=>seek(playhead-1)}>−1 sec</button><button disabled={busy} onClick={()=>seek(playhead-0.1)}>−0.1 sec</button><button disabled={busy} onClick={()=>seek(playhead+0.1)}>+0.1 sec</button><button disabled={busy} onClick={()=>seek(playhead+1)}>+1 sec</button></div></div>
         <div className="row"><label>Start (seconds)<input aria-label="Clip start seconds" type="number" min={0} max={recording.duration} step={0.001} value={start} disabled={busy} onChange={e => setStart(Number(e.target.value))}/><small>{timestamp(start)}</small></label><label>End (seconds)<input aria-label="Clip end seconds" type="number" min={0} max={recording.duration} step={0.001} value={end} disabled={busy} onChange={e => setEnd(Number(e.target.value))}/><small>{timestamp(end)}</small></label></div>
@@ -100,7 +106,3 @@ export default function GoldenMoments() {
     </section>
   </>;
 }
-
-
-
-
