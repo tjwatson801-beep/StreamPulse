@@ -1,0 +1,14 @@
+const assert=require('node:assert/strict');
+const {validateEditing,captionAss,framingFilter}=require('../dist-electron/videoEditing');
+assert.throws(()=>validateEditing({captions:[{start:0,end:2,text:'bad{tag}'}]},3));
+assert.throws(()=>validateEditing({captions:[{start:1,end:2,text:'later'},{start:0,end:1,text:'earlier'}]},3));
+assert.throws(()=>validateEditing({captions:[{start:0,end:4,text:'long'}]},3));
+assert.throws(()=>validateEditing({font:'untrusted,font'},3));
+const words=[{start:0,end:0.5,text:'Stay'},{start:0.6,end:1,text:'Golden!'}];
+const ass=captionAss(validateEditing({captions:words},2).captions);
+assert.ok(ass.includes('{\\c&H0000D7FF&}Stay {\\c&H00FFFFFF&}Golden!'));
+assert.ok(ass.includes('{\\c&H00FFFFFF&}Stay {\\c&H0000D7FF&}Golden!'));
+assert.ok(ass.includes('0:00:00.50,0:00:00.60'));
+assert.ok(!captionAss(words,'Segoe UI',false).includes('{\\c&H0000D7FF&}'));
+assert.match(framingFilter('fit',true),/vstack=inputs=3/);
+console.log('Caption timing, ASS safety, word highlights and framing validation passed.');

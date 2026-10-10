@@ -15,4 +15,7 @@ StreamPulse-v*/
 .DS_Store
 Thumbs.db
 migration-*.json
+work/
 Streampulsebuildnotes.txt
+
+local-caption-runtime/

@@ -1,6 +1,17 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("streamPulseCore", {
+  video: {
+    status: () => ipcRenderer.invoke('video:status'),
+    analyze: (id: string) => ipcRenderer.invoke('video:analyze', id),
+    speechTools: () => ipcRenderer.invoke('video:speech-tools'),
+    transcribe: (args: unknown) => ipcRenderer.invoke('video:transcribe', args),
+    tools: () => ipcRenderer.invoke('video:tools'),
+    import: () => ipcRenderer.invoke('video:import'),
+    export: (args: unknown) => ipcRenderer.invoke('video:export', args),
+    cancel: () => ipcRenderer.invoke('video:cancel'),
+    onProgress: (handler: (progress: number) => void) => { const listener = (_: unknown, progress: number) => handler(progress); ipcRenderer.on('video:progress', listener); return () => ipcRenderer.removeListener('video:progress', listener); }
+  },
   onFlushSettings: (handler: () => Promise<void>) => {
     const listener = async (_: unknown, token: string) => {
       try { await handler(); ipcRenderer.send('core:settings-flushed', {token}); }

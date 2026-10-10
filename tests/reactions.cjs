@@ -158,7 +158,7 @@ async function main() {
   const core = { onStatus: () => () => {}, onEvent: fn => { handleEvent = fn; return () => {}; },
     overlayShow: async args => { overlays.push(args); return { ok: true }; } };
   const TestAudio = class { constructor(url) { this.url = url; } async play() { sounds.push(this.url); soundVolumes.push(this.volume); } pause() {} };
-  const { default: App } = loadTs('src/App.tsx', { react, './soundPlayback': loadTs('src/soundPlayback.ts', {}, { setTimeout: () => 1, clearTimeout: () => {}, Audio: TestAudio }), './Updates': { default: () => null }, './giftActions': loadTs('src/giftActions.ts', {}), './types': { defaults }, './giftCatalog': gifts, './GiftPicker': { default: () => null }, './stickerCatalog': catalog, './StickerSounds': { default: () => null } }, {
+  const { default: App } = loadTs('src/App.tsx', { react, './GoldenMoments': { default: () => null }, './soundPlayback': loadTs('src/soundPlayback.ts', {}, { setTimeout: () => 1, clearTimeout: () => {}, Audio: TestAudio }), './Updates': { default: () => null }, './giftActions': loadTs('src/giftActions.ts', {}), './types': { defaults }, './giftCatalog': gifts, './GiftPicker': { default: () => null }, './stickerCatalog': catalog, './StickerSounds': { default: () => null } }, {
     URL, React: react, window: { streamPulseCore: core }, crypto: require('node:crypto').webcrypto,
     Audio: TestAudio
   });

@@ -1,3 +1,4 @@
+import { setupVideoEngine } from './videoEngine';
 import { flushRendererSettings } from './settingsFlush';
 import { claimInstance } from './singleInstance';
 import { SettingsStore } from './settingsStore';
@@ -23,12 +24,14 @@ const soundHotkeys = new SoundHotkeys(globalShortcut, soundPath => send('core:so
 app.on('will-quit', () => soundHotkeys.clear());
 let provider: LiveProvider | null = null;
 let closing = false;
+let videoEngine: ReturnType<typeof setupVideoEngine> | undefined;
 let closePending = false;
 async function flushSettings() { await flushRendererSettings(window); await settingsStore.flush(); }
 async function requestClose() {
   if (closePending || closing) return;
   closePending = true;
   try {
+    if (videoEngine?.isBusy()) { await dialog.showMessageBox({type:'info',title:'Golden Moments is working',message:'Finish or cancel the video job before closing StreamPulse.'}); return; }
     try { await flushSettings(); }
     catch (error) {
       const result = await dialog.showMessageBox({type:'warning',title:'Settings were not saved',message:error instanceof Error ? error.message : 'Settings could not be saved.',buttons:['Keep StreamPulse open','Close without saving'],defaultId:0,cancelId:0});
@@ -135,7 +138,8 @@ async function createWindow() {
 app.whenReady().then(async () => {
   if (!primaryInstance) return;
   try { await settingsStore.backup(`Startup ${app.getVersion()}`); } catch { diagnosticLog("Startup backup failed; settings file may need recovery."); }
-  setupUpdater(() => reconnectEnabled, async () => { await flushSettings(); await settingsStore.backup("Before update"); await disconnect(); await stopSecureTunnel(); await stopOverlayServer(); closing = true; });
+  videoEngine = setupVideoEngine();
+  setupUpdater(() => reconnectEnabled, async () => { await flushSettings(); await settingsStore.backup("Before update"); await disconnect(); await stopSecureTunnel(); await stopOverlayServer(); closing = true; }, () => Boolean(videoEngine?.isBusy()));
   diagnosticLog(`StreamPulse ${app.getVersion()} started`);
   ipcMain.handle("core:gift-catalog", async () => ({ ok: false, error: "StreamPulse uses your saved gift library and automatically adds gifts received during LIVE. A full catalog download is not available through this connection." }));
   ipcMain.handle("core:diagnostics", async () => {

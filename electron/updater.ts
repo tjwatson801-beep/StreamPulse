@@ -1,6 +1,6 @@
 import { app, dialog, ipcMain } from 'electron';
 import { autoUpdater } from 'electron-updater';
-export function setupUpdater(isLive: () => boolean, prepare: () => Promise<void>) {
+export function setupUpdater(isLive: () => boolean, prepare: () => Promise<void>, isVideoBusy: () => boolean = () => false) {
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.allowPrerelease = true;
@@ -32,11 +32,13 @@ export function setupUpdater(isLive: () => boolean, prepare: () => Promise<void>
   ipcMain.handle('core:update-install', async () => {
     if (busy || state.phase !== 'ready') return state;
     if (isLive()) { set({ error: 'Disconnect from LIVE before installing.' }); return state; }
+    if (isVideoBusy()) { set({ error: 'Finish or cancel the Golden Moments job before installing.' }); return state; }
     busy = true;
     try {
       const answer = await dialog.showMessageBox({ type: 'question', buttons: ['Cancel', 'Install and restart'], defaultId: 0, cancelId: 0, title: 'Update StreamPulse', message: `Install StreamPulse ${state.version}?`, detail: 'StreamPulse and its overlay links will close during installation. Your saved settings and gift rules will be kept.' });
       if (answer.response !== 1) return state;
       if (isLive()) { set({ error: 'Disconnect from LIVE before installing.' }); return state; }
+      if (isVideoBusy()) { set({ error: 'Finish or cancel the Golden Moments job before installing.' }); return state; }
       set({ phase: 'installing', error: '' });
       await prepare();
       autoUpdater.quitAndInstall(false, true);

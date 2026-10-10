@@ -27,6 +27,20 @@ npm run dist:win
 
 TikTok LIVE Studio overlay URL: `http://127.0.0.1:17890/overlay/gifts`
 
+## Golden Moments
+
+Open **Golden Moments** to import an MP4, MOV, MKV, or WebM recording, preview it, select start/end times, and export an H.264/AAC MP4. FFmpeg and FFprobe are required. StreamPulse detects tools on PATH and in an extracted FFmpeg download, or use **Choose video tools folder**. Manually selected folders are saved across restarts. Video tools are external and are not included in the installer.
+
+**Find audio highlights** analyzes recordings longer than 15 minutes in overlapping 15-minute sections, combines the results, removes duplicate moments, and returns up to 64 suggestions in recording order. Short recordings return up to eight suggestions. Each section uses its own audio baseline so quieter parts of a long stream can produce suggestions. Review each moment for context and adjust its boundaries before exporting. Suggestions measure audio energy; they do not recognize jokes, meaning, or gift/chat events. Silent recordings still support manual clipping.
+
+The preview timestamp identifies the moment being reviewed and the recording name. Camera focus enlarges the camera in the top third of a vertical recording, with gameplay underneath and compact branding at the bottom. Optional audio polish normalizes clip volume. Eight caption fonts and a live font sample are available, with gold highlights on spoken words. The player displays the source; final framing and burned captions appear in the exported MP4.
+
+Local captions require Python, faster-whisper libraries in a `speech-libs` folder, and the cached small.en model in `speech-models`. Select your Python executable and the parent runtime folder with **Set up local captions**. These speech dependencies and font files are not bundled in the installer. Captions have editable word text and start/end times relative to the selected clip. Regenerate captions after changing the cut.
+
+Export with the original aspect ratio, fit the full recording into a 1080 × 1920 vertical frame with black bars, or center-crop to vertical. Preview codec support depends on Electron; H.264 MP4 is a suitable starting format. Processing stays on this computer. Progress and cancellation are available for analysis and encoding. Partial exports are removed, and recording paths and file aliases are protected from overwrite. Finish or cancel the active video job before closing the app or installing an update.
+
+Build and run `npm run video:check` for real FFmpeg tests through the production preload and UI using synthetic media. Set `STREAMPULSE_TEST_PACKAGE` to a packaged `resources/app.asar` path to run the same tests against a packaged build. `npm run release:check` includes backend unit/integration tests and the existing regression suite.
+
 ## Sound Library
 
 Open **Sound Library** to scan the local `Documents/StreamPulse/Sounds` folder. Use **Choose folder** for another location. Audio files appear automatically every 10 seconds, or immediately with **Refresh**. Supported files: MP3, WAV, OGG, M4A, AAC, FLAC, and WebM; codec availability depends on Electron.
