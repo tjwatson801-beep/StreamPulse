@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld("streamPulseCore", {
     tools: () => ipcRenderer.invoke('video:tools'),
     import: () => ipcRenderer.invoke('video:import'),
     export: (args: unknown) => ipcRenderer.invoke('video:export', args),
+    preview: (args: unknown) => ipcRenderer.invoke('video:preview', args),
     cancel: () => ipcRenderer.invoke('video:cancel'),
     onProgress: (handler: (progress: number) => void) => { const listener = (_: unknown, progress: number) => handler(progress); ipcRenderer.on('video:progress', listener); return () => ipcRenderer.removeListener('video:progress', listener); }
   },

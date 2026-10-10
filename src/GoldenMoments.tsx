@@ -16,6 +16,7 @@ export type VideoApi = {
   speechTools: () => Promise<string|null>;
   search: (args:unknown) => Promise<{highlights:SearchMoment[];message:string}>;
   montage: (args:unknown) => Promise<string[]|null>;
+  preview: (args:unknown) => Promise<{url:string;duration:number}>;
   transcribe: (args:{id:string;start:number;end:number}) => Promise<CaptionWord[]>;
   export: (args: {id: string; start: number; end: number; framing: string; editing?:{cameraFocus:boolean;audioPolish:boolean;captions:CaptionWord[];font:string;wordHighlight:boolean}}) => Promise<string | null>;
   cancel: () => Promise<void>;
@@ -36,6 +37,9 @@ export default function GoldenMoments() {
   const [analyzing, setAnalyzing] = useState(false);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [reviewedMoment,setReviewedMoment]=useState<number|null>(null);
+  const [editedPreview,setEditedPreview]=useState<{url:string;duration:number}|null>(null);
+  const [previewing,setPreviewing]=useState(false);
+  useEffect(()=>{setEditedPreview(null);},[recording?.id,start,end,framing,cameraFocus,audioPolish,captions,font,wordHighlight]);
   const [cuts,setCuts]=useState<MontageCut[]>([]),[momentFilter,setMomentFilter]=useState('all');
   const [toolsStatus, setToolsStatus] = useState('Checking video tools…');
   const [progress, setProgress] = useState(0), [message, setMessage] = useState('');
@@ -63,7 +67,7 @@ export default function GoldenMoments() {
     setBusy(true); setError(''); setMessage('');
     try { if (!api) throw Error('Open Golden Moments in the StreamPulse desktop app.'); await work(); }
     catch (e) { setError(e instanceof Error ? e.message : String(e)); }
-    finally { setBusy(false); setExporting(false); setAnalyzing(false); setTranscribing(false); }
+    finally { setBusy(false); setExporting(false); setAnalyzing(false); setTranscribing(false); setPreviewing(false); }
   }
   const valid = Boolean(recording && Number.isFinite(start) && Number.isFinite(end) && start >= 0 && end > start && end <= recording.duration);
   const previewStyle = framing === 'original' ? {width: '100%', maxHeight: 420} : {width: 236, height: 420, objectFit: framing === 'crop' ? 'cover' as const : 'contain' as const};
@@ -100,6 +104,10 @@ export default function GoldenMoments() {
         {captions.length>0 && <><p>{captionsCurrent?'Review captions':'Clip selection changed — regenerate captions before exporting.'}</p><button disabled={busy} onClick={()=>setCaptions([])}>Remove captions</button><div style={{maxHeight:260,overflowY:'auto'}}>{captions.map((w,i)=><div className="row" key={i}><input aria-label={`Word ${i+1}`} disabled={busy} value={w.text} onChange={e=>setCaptions(old=>old.map((v,n)=>n===i?{...v,text:e.target.value}:v))}/><input aria-label={`Word ${i+1} start`} type="number" step={0.01} value={w.start} disabled={busy} onChange={e=>setCaptions(old=>old.map((v,n)=>n===i?{...v,start:Number(e.target.value)}:v))}/><input aria-label={`Word ${i+1} end`} type="number" step={0.01} value={w.end} disabled={busy} onChange={e=>setCaptions(old=>old.map((v,n)=>n===i?{...v,end:Number(e.target.value)}:v))}/></div>)}</div></>}
         {transcribing && <p role="status">Generating local captions… <button onClick={()=>api?.cancel()}>Cancel captions</button></p>}
         <p>{valid ? `${timestamp(start)} → ${timestamp(end)} · ${(end-start).toFixed(3)} second clip` : 'Choose an end after the start, within the recording.'}</p>
+        <button disabled={busy || !valid || (captions.length>0 && !captionsCurrent)} onClick={()=>action(async()=>{setPreviewing(true);setProgress(0);const result=await api!.preview({id:recording.id,start,end,framing,editing:{cameraFocus,audioPolish,captions:captionsCurrent?captions:[],font,wordHighlight}});setEditedPreview(result);setMessage('Edited preview ready. Play it below, then export when you are happy with it.');})}>Preview edited clip</button>
+        <small>Builds a temporary playback copy with your current edits. Generate captions first if you want captions in the preview. Changing the cut or editing settings clears the preview.</small>
+        {previewing && <div className="row"><progress max={100} value={progress}/><span>Building preview: {progress}%</span><button onClick={()=>api?.cancel().catch(e=>setError(String(e)))}>Cancel preview</button></div>}
+        {editedPreview && <section className="card"><h2>Edited clip preview</h2><video aria-label="Edited clip preview" key={editedPreview.url} src={editedPreview.url} controls style={{width:'100%',maxHeight:560}} onError={()=>setError('The edited preview could not play. Rebuild the preview and try again.')}/><small>{editedPreview.duration.toFixed(3)} seconds · current cut with your selected effects</small></section>}
         <div className="row"><button className="primary" disabled={busy || !valid || (captions.length>0 && !captionsCurrent)} onClick={() => action(async () => { setExporting(true); setProgress(0); const file = await api!.export({id:recording.id,start,end,framing,editing:{cameraFocus,audioPolish,captions:captionsCurrent?captions:[],font,wordHighlight}}); if (file) setMessage(`Clip saved: ${file}`); })}>Export MP4</button>{(exporting || analyzing) && <><progress max={100} value={progress}/><span>{analyzing ? 'Analyzing' : 'Exporting'}: {progress}%</span><button onClick={() => api?.cancel().catch(e => setError(String(e)))}>{analyzing ? 'Cancel analysis' : 'Cancel export'}</button></>}</div>
       </>}
       <small>Audio suggestions identify volume changes. Review suggested moments and generated captions before sharing.</small>

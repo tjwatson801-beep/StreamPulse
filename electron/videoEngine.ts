@@ -21,6 +21,7 @@ export function setupVideoEngine() {
   let server: Server | null = null;
   const recordings = new Map<string, {path: string; duration: number; hasAudio: boolean; width:number; height:number}>();
   const speechConfig = path.join(app.getPath('userData'), 'speech-tools.json');
+  const editedPreviews: {id:string;directory:string}[]=[];
   ipcMain.handle('video:speech-tools', async () => {
     if (busy) throw Error('Wait for the current video job.');
     const python = await dialog.showOpenDialog({title:'Choose Python with faster-whisper support',properties:['openFile'],filters:[{name:'Python executable',extensions:['exe']}]});
@@ -182,7 +183,7 @@ export function setupVideoEngine() {
     } finally {busy=false;}
   });
   ipcMain.handle('video:cancel', () => { if (active) {cancelled = true; active.kill();} });
-  ipcMain.handle('video:export', async (event, args: unknown) => {
+  async function exportClip(event:any, args: unknown, preview=false) {
     if (busy) throw Error('A video job is already running.');
     const input = args as {id: string; start: number; end: number; framing: string; editing?:ClipEditing};
     const source = recordings.get(input?.id);
@@ -195,8 +196,10 @@ export function setupVideoEngine() {
     busy = true; cancelled = false;
     let temporary = '';
     let subtitleDirectory='';
+    let previewDirectory='';
     try {
-      const destination = await dialog.showSaveDialog({title: 'Export Golden Moment', defaultPath: path.join(app.getPath('videos'), `Golden-Moment-${Math.floor(input.start)}.mp4`), filters: [{name: 'MP4 video', extensions: ['mp4']}]});
+      if(preview)previewDirectory=await fs.mkdtemp(path.join(app.getPath('temp'),'golden-preview-'));
+      const destination = preview ? {canceled:false,filePath:path.join(previewDirectory,'preview.mp4')} : await dialog.showSaveDialog({title: 'Export Golden Moment', defaultPath: path.join(app.getPath('videos'), `Golden-Moment-${Math.floor(input.start)}.mp4`), filters: [{name: 'MP4 video', extensions: ['mp4']}]});
       if (destination.canceled || !destination.filePath) return null;
       const outputPath = /\.mp4$/i.test(destination.filePath) ? destination.filePath : destination.filePath + '.mp4';
       if (path.resolve(outputPath).toLowerCase() === path.resolve(source.path).toLowerCase()) throw Error('Choose a different file from your recording.');
@@ -225,10 +228,18 @@ export function setupVideoEngine() {
       if (cancelled) throw Error('Export cancelled.');
       await fs.rename(temporary, outputPath); temporary = '';
       if (!event.sender.isDestroyed()) event.sender.send('video:progress', 100);
+      if(preview){
+        const id=randomUUID();recordings.set(id,{...source,path:outputPath,duration:clip.length});
+        const url=await previewUrl(id);editedPreviews.push({id,directory:previewDirectory});previewDirectory='';
+        while(editedPreviews.length>3){const old=editedPreviews.shift()!;recordings.delete(old.id);await fs.rm(old.directory,{recursive:true,force:true}).catch(()=>{});}
+        return {url,duration:clip.length};
+      }
       return outputPath;
-    } finally { busy = false; if (temporary) await fs.unlink(temporary).catch(() => {}); if(subtitleDirectory)await fs.rm(subtitleDirectory,{recursive:true,force:true}).catch(()=>{}); }
-  });
+    } finally { busy = false; if (temporary) await fs.unlink(temporary).catch(() => {}); if(subtitleDirectory)await fs.rm(subtitleDirectory,{recursive:true,force:true}).catch(()=>{});if(previewDirectory)await fs.rm(previewDirectory,{recursive:true,force:true}).catch(()=>{}); }
+  }
+  ipcMain.handle('video:export', (event,args:unknown)=>exportClip(event,args));
+  ipcMain.handle('video:preview', (event,args:unknown)=>exportClip(event,args,true));
   setupMomentEngine({recordings,run,speechWords,tool,loadFolder,begin:()=>{if(busy)throw Error('A video job is already running.');busy=true;cancelled=false;},finish:()=>{busy=false;},check:()=>{if(cancelled)throw Error('Video job cancelled.');},setActive:child=>{active=child;}});
-  app.on('will-quit', () => {cancelled = true; active?.kill(); server?.close();});
+  app.on('will-quit', () => {cancelled = true; active?.kill(); server?.close();for(const item of editedPreviews)void fs.rm(item.directory,{recursive:true,force:true}).catch(()=>{});});
   return {isBusy: () => busy};
 }

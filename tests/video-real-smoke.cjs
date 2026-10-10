@@ -59,6 +59,17 @@ app.whenReady().then(async()=>{
    assert.equal(video.width,framing==='original'?320:1080);assert.equal(video.height,framing==='original'?180:1920);
    await command(binary('ffmpeg'),['-v','error','-i',output,'-f','null','-']);
   }
+  // Edited preview is playable in the UI without opening a save dialog.
+  const saveDialog=dialog.showSaveDialog;dialog.showSaveDialog=async()=>{throw Error('Preview must not ask for an export destination');};
+  await run("Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Preview edited clip').click()");
+  await wait("document.querySelector('video[aria-label=\"Edited clip preview\"]')?.readyState>=2");
+  assert.ok(await run("Math.abs(document.querySelector('video[aria-label=\"Edited clip preview\"]').duration-2)<0.2"));
+  await run("document.querySelector('video[aria-label=\"Edited clip preview\"]').play()");
+  await wait("document.querySelector('video[aria-label=\"Edited clip preview\"]').currentTime>0.1");
+  await run("document.querySelector('video[aria-label=\"Edited clip preview\"]').pause()");
+  await inputs(4.125,6.025);await wait("!document.querySelector('video[aria-label=\"Edited clip preview\"]')");
+  dialog.showSaveDialog=saveDialog;
+  console.log('Edited preview playback, no save dialog, and invalidation after trimming passed.');
   // Camera focus, ASS word highlights, and two-pass audio through the real engine.
   const portrait=path.join(root,'portrait.mp4');
   await command(binary('ffmpeg'),['-v','error','-f','lavfi','-i','testsrc2=size=360x640:rate=12','-f','lavfi','-i','sine=frequency=440:sample_rate=48000','-t','2','-c:v','libx264','-preset','ultrafast','-c:a','aac',portrait]);
@@ -67,6 +78,8 @@ app.whenReady().then(async()=>{
   await run(`window.streamPulseCore.video.export(${JSON.stringify({id:vertical.id,start:0,end:2,framing:'fit',editing})})`);
   const styled=JSON.parse(await command(binary('ffprobe'),['-v','error','-show_streams','-of','json',output]));assert.equal(styled.streams[0].width,1080);assert.equal(styled.streams[0].height,1920);
   await command(binary('ffmpeg'),['-v','error','-i',output,'-f','null','-']);
+  const preview=await run(`window.streamPulseCore.video.preview(${JSON.stringify({id:vertical.id,start:0,end:2,framing:'fit',editing})})`);
+  const previewInfo=JSON.parse(await command(binary('ffprobe'),['-v','error','-show_streams','-show_format','-of','json',preview.url]));assert.equal(previewInfo.streams[0].width,1080);assert.ok(Math.abs(Number(previewInfo.format.duration)-2)<0.2);
   if(process.env.STREAMPULSE_SPEECH_ROOT && process.env.STREAMPULSE_SPEECH_PYTHON && process.env.STREAMPULSE_SPEECH_VIDEO){
     await fs.writeFile(path.join(root,'settings','speech-tools.json'),JSON.stringify({python:process.env.STREAMPULSE_SPEECH_PYTHON,runtime:process.env.STREAMPULSE_SPEECH_ROOT}));
     selected=process.env.STREAMPULSE_SPEECH_VIDEO;const speech=await run('window.streamPulseCore.video.import()');
