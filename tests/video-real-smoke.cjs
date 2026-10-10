@@ -41,8 +41,18 @@ app.whenReady().then(async()=>{
   await run("Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='+0.1 sec').click()");
   await wait("document.querySelector('output[aria-label=\"Current playback timestamp\"]').textContent.includes('00:00:04.225')");
   await run("Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Find audio highlights').click()");
-  await wait("document.body.textContent.includes('Review moment 1')");
-  await run("Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Review moment 1').click()");
+  await wait("document.querySelector('select[aria-label=\"Moment selection\"] option[value=\"0\"]')");
+  await run("Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Next moment').click()");
+  assert.equal(await run("document.querySelector('select[aria-label=\"Moment selection\"]').value"),'0');
+  assert.ok(await run("Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Previous moment').disabled"));
+  await run("(()=>{const s=document.querySelector('select[aria-label=\"Moment filter\"]');Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(s,'kill');s.dispatchEvent(new Event('change',{bubbles:true}));})()");
+  await wait("document.querySelector('select[aria-label=\"Moment selection\"]').disabled");
+  assert.ok(await run("document.body.textContent.includes('No moments match this filter.')"));
+  await run("(()=>{const s=document.querySelector('select[aria-label=\"Moment filter\"]');Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(s,'all');s.dispatchEvent(new Event('change',{bubbles:true}));})()");
+  await wait("document.querySelector('select[aria-label=\"Moment selection\"]').value==='0'");
+  await run("document.querySelector('.golden-review-layout').scrollIntoView({block:'center'})");
+  await new Promise(r=>setTimeout(r,150));
+  await fs.mkdir(path.join(__dirname,'..','work'),{recursive:true});await fs.writeFile(path.join(__dirname,'..','work','golden-moment-selector.png'),(await win.webContents.capturePage()).toPNG());
   assert.ok(await run("Number([document.querySelector('input[aria-label=\"Clip start seconds\" ]'),document.querySelector('input[aria-label=\"Clip end seconds\" ]')][0].value)<=21 && Number([document.querySelector('input[aria-label=\"Clip start seconds\" ]'),document.querySelector('input[aria-label=\"Clip end seconds\" ]')][1].value)>=18"));
   async function inputs(start,end){await run(`(()=>{const inputs=[document.querySelector('input[aria-label=\"Clip start seconds\" ]'),document.querySelector('input[aria-label=\"Clip end seconds\" ]')];for(const [i,value] of [[0,${start}],[1,${end}]]){Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(inputs[i],String(value));inputs[i].dispatchEvent(new Event('input',{bubbles:true}));}})()`);}
   await inputs(4.125,6.125);
