@@ -128,6 +128,7 @@ export class TikToolProvider implements LiveProvider {
     if (kind !== "like" && kind !== "chat" && kind !== "gift" && !isFollow && !isSuperFanJoin && !isJoin && !isSticker) return;
     if (this.currentStatus === "connecting") { this.clearConfirmation(); this.setStatus("connected", "Receiving LIVE events"); }
     const userData = data?.user || {}; const user = String(userData.uniqueId || data?.uniqueId || userData.nickname || "viewer");
+    const displayName = [userData.nickname, data?.nickname].find(value => typeof value === "string" && value.trim())?.trim();
     const identity = String(data?.messageUuid || data?.transactionId || data?.msgId || data?.id || "");
     const normalizedKind = isFollow ? "follow" : isSuperFanJoin ? "superfanjoin" : isJoin ? "join" : isSticker ? "emotechat" : kind;
     const key = identity ? `${normalizedKind}:${identity}:${stickers.map(item => item.stickerId).join(",")}${kind === "gift" ? `:${data?.repeatCount || 1}:${data?.repeatEnd ?? true}` : ""}` : `${normalizedKind}:${user}:${data?.comment || data?.giftName || data?.emoteId || ""}:${data?.repeatCount || 1}:${data?.repeatEnd ?? ""}`;
@@ -142,14 +143,14 @@ export class TikToolProvider implements LiveProvider {
       const count = Number(data?.likeCount);
       const total = data?.totalLikeCount == null ? undefined : Number(data.totalLikeCount);
       this.emit({ id: identity || `${now}-${Math.random()}`, type: "Like",
-        user: String(userData.uniqueId || data?.uniqueId || "").trim(), time: new Date().toLocaleTimeString(), detail: "sent likes",
+        user: String(userData.uniqueId || data?.uniqueId || "").trim(), displayName, time: new Date().toLocaleTimeString(), detail: "sent likes",
         profilePictureUrl: typeof userData.profilePictureUrl === "string" ? userData.profilePictureUrl : undefined,
         likeCount: Number.isSafeInteger(count) && count > 0 ? count : undefined,
         totalLikeCount: typeof total === "number" && Number.isSafeInteger(total) && total >= 0 ? total : undefined });
       return;
     }
     const followRole = Number(userData.followRole ?? 0);
-    const common = { id: identity || `${now}-${Math.random()}`, user, time: new Date().toLocaleTimeString(), followRole, isFollower: followRole > 0, isSubscriber: Boolean(userData.isSubscriber) };
+    const common = { id: identity || `${now}-${Math.random()}`, user, displayName, time: new Date().toLocaleTimeString(), followRole, isFollower: followRole > 0, isSubscriber: Boolean(userData.isSubscriber) };
     for (const sticker of stickers) this.emit({ ...common, id: `${common.id}:sticker:${sticker.stickerId}`, type: "Sticker", detail: `sent sticker ${sticker.stickerId}`, ...sticker });
     if (kind === "chat") this.emit({ ...common, type: "Chat", detail: String(data?.comment || "") });
     else if (kind === "gift") this.emit({ ...common, type: "Gift", detail: `sent ${data?.giftName || "Gift"}`, giftName: String(data?.giftName || "Gift"), giftImageUrl: typeof data?.giftPictureUrl === "string" ? data.giftPictureUrl : undefined, count: Number(data?.repeatCount || 1), comboComplete: data?.giftType != null && Number(data.giftType) !== 1 ? true : Boolean(data?.repeatEnd ?? true) });

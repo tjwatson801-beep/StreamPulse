@@ -29,7 +29,7 @@ export class OverlayLibrary {
     if (!config.enabled || after <= before || Math.floor(after / config.threshold) <= Math.floor(before / config.threshold)) return;
     // One celebration for the highest milestone crossed by this batch.
     const milestone = Math.floor(after / config.threshold) * config.threshold;
-    return { channel: "like-pop" as const, title: `${milestone.toLocaleString("en-US")} likes!`, body: `@${event.user.replace(/^@/, "")} is spreading the love`, imageUrl: event.profilePictureUrl, ...config };
+    return { channel: "like-pop" as const, title: `${milestone.toLocaleString("en-US")} likes!`, body: `${event.displayName?.trim() || "@" + event.user.replace(/^@/, "")} is spreading the love`, imageUrl: event.profilePictureUrl, ...config };
   }
   gift(event: LiveEvent) {
     if (event.type !== "Gift") return;
@@ -43,6 +43,6 @@ export class OverlayLibrary {
     const count = Number.isSafeInteger(event.count) && event.count! > 0 ? event.count! : 1;
     const names = config.names.split(",").map(n => n.trim().toLowerCase()).filter(Boolean);
     if (!config.enabled || count < config.minimumCount || (names.length && !names.includes((event.giftName || "").trim().toLowerCase()))) return;
-    return { channel: "gift-highlight" as const, title: `${event.giftName || "Gift"} ×${count}`, body: `Thank you, @${event.user.replace(/^@/, "")}!`, imageUrl, ...config };
+    return { channel: "gift-highlight" as const, title: `${event.giftName || "Gift"} ×${count}`, body: `Thank you, ${event.displayName?.trim() || "@" + event.user.replace(/^@/, "")}!`, imageUrl, ...config };
   }
 }

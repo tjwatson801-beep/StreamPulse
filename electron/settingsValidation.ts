@@ -27,9 +27,9 @@ const schemas: Record<string, Schema> = {
 };
 export function validateSettings(value: unknown): Record<string, any> {
   const state = fields(value, {
-    ...str('soundLibraryFolder username likesTextColor likesCountColor likesLeaderColor likesFont voiceURI chatTemplate followTemplate followSoundPath superFanTemplate superFanImagePath superFanSoundPath permanentOverlayHostname defaultGiftTemplate ttsBlockedPhrases'),
-    ...bool('likesShowBorder ttsEnabled followEnabled superFanEnabled stickerSoundsEnabled ttsSkipLinks ttsSkipCommands giftReactionsEnabled giftCatalogSample'),
-    ...num('soundMasterVolume likesTextScale likesWidth likesBackgroundOpacity volume rate pitch superFanDurationMs giftCatalogUpdatedAt'),
+    ...str('soundLibraryFolder username likesTextColor likesCountColor likesLeaderColor likesFont voiceURI chatTemplate followTemplate followSoundPath superFanTemplate superFanImagePath superFanSoundPath permanentOverlayHostname defaultGiftTemplate defaultGiftSoundPath ttsBlockedPhrases'),
+    ...bool('setupComplete likesShowBorder ttsEnabled followEnabled superFanEnabled stickerSoundsEnabled ttsSkipLinks ttsSkipCommands giftReactionsEnabled giftCatalogSample'),
+    ...num('defaultGiftSoundVolume soundMasterVolume likesTextScale likesWidth likesBackgroundOpacity volume rate pitch superFanDurationMs giftCatalogUpdatedAt'),
     soundPlaybackMode:['overlap','queue','interrupt'], connectionProvider:['direct','tikfinity'], audience:['everyone','followers','subscribers']
   }, 'settings', true);
   for (const [key,schema] of Object.entries(schemas)) {
@@ -37,6 +37,7 @@ export function validateSettings(value: unknown): Record<string, any> {
     if (!Array.isArray(state[key])) throw Error(`Invalid ${key}: expected a list.`);
     state[key].forEach((entry: unknown, index: number) => fields(entry, schema, `${key}[${index}]`));
   }
+  if ('defaultGiftSoundVolume' in state && (state.defaultGiftSoundVolume < 0 || state.defaultGiftSoundVolume > 1)) throw Error('Invalid default gift sound volume.');
   if ('soundMasterVolume' in state && (state.soundMasterVolume < 0 || state.soundMasterVolume > 1)) throw Error('Invalid sound master volume.');
   if ('overlayLibrary' in state) {
     const library = object(state.overlayLibrary, 'overlayLibrary');

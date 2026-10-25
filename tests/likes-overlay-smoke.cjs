@@ -16,14 +16,14 @@ app.whenReady().then(async () => {
   try {
     const port = await startOverlayServer(0);
     likesTracker.startStream("test-host", "test-room");
-    likesTracker.add({ id: "test", type: "Like", user: "<script>safe</script>", likeCount: 25, totalLikeCount: 200 });
+    likesTracker.add({ id: "test", type: "Like", user: "<script>safe</script>", displayName: "Friendly <b>Name</b>", likeCount: 25, totalLikeCount: 200 });
     win = new BrowserWindow({ show: false, width: 480, height: 900, useContentSize: true, webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true } });
     await win.webContents.session.protocol.handle("https", request => request.url === "https://avatar.test/good.png"
       ? new Response('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#35756a"/><circle cx="32" cy="23" r="12" fill="#b6e8d4"/><ellipse cx="32" cy="59" rx="23" ry="20" fill="#b6e8d4"/></svg>', { headers: { "content-type": "image/svg+xml" } })
       : new Response("", { status: 404 }));
     await win.loadURL("http://127.0.0.1:" + port + "/overlay/likes");
     await waitFor("document.querySelector('#total').textContent === '200'");
-    assert.equal(await win.webContents.executeJavaScript("document.querySelector('.name').textContent"), "@<script>safe</script>");
+    assert.equal(await win.webContents.executeJavaScript("document.querySelector('.name').textContent"), "Friendly <b>Name</b>");
     assert.equal(await win.webContents.executeJavaScript("document.querySelector('#leaders script') === null"), true);
     likesTracker.add({ id: "test2", type: "Like", user: "GoldFan", profilePictureUrl: "https://avatar.test/good.png", likeCount: 50, totalLikeCount: 250 });
     publishLikes();

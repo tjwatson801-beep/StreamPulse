@@ -1,0 +1,6 @@
+const fs=require('node:fs'),path=require('node:path'),{spawnSync}=require('node:child_process');
+const root=path.join(__dirname,'..');
+for(const file of ['resources/video-tools/ffmpeg.exe','resources/video-tools/ffprobe.exe','resources/video-tools/LICENSE','resources/caption-runtime/python/python.exe','resources/caption-runtime/python/LICENSE.txt','resources/caption-runtime/model/model.bin','resources/third-party-notices/INVENTORY.json'])if(!fs.existsSync(path.join(root,file)))throw Error('Missing beta resource: '+file);
+for(const binary of ['ffmpeg','ffprobe']){const result=spawnSync(path.join(root,'resources/video-tools',binary+'.exe'),['-version'],{windowsHide:true,encoding:'utf8'});if(result.status!==0)throw Error(binary+' failed its bundled check');}
+const result=spawnSync(path.join(root,'resources/caption-runtime/python/python.exe'),['-I','-B',path.join(root,'resources/transcribe.py'),'--check',path.join(root,'resources/caption-runtime')],{windowsHide:true,encoding:'utf8',timeout:60000});if(result.status!==0)throw Error(result.stderr||'Caption runtime failed');
+console.log('Bundled tools and offline speech model passed. This is an INTERNAL beta candidate; redistribution licensing and clean-Windows LIVE Studio checks are not cleared.');

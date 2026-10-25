@@ -17,6 +17,8 @@ import { TikFinityProvider } from "./providers/TikFinityProvider";
 import { OVERLAY_PORT, processLibraryEvent, setLikesAppearance, likesTracker, publishLikes, showOverlayAlert, startOverlayServer, stopOverlayServer } from "./overlayServer";
 import { extractTunnelToken, getSecureOverlayInfo, normalizeHostname, restartSecureTunnel, startSecureTunnel, stopSecureTunnel } from "./secureTunnel";
 
+const betaBuild = /-beta\./.test(app.getVersion());
+if (betaBuild) { app.setName('StreamPulse Beta'); const betaData = path.join(app.getPath('appData'), 'StreamPulse Beta'); mkdirSync(betaData, {recursive:true}); app.setPath('userData', betaData); }
 let window: BrowserWindow | null = null;
 const primaryInstance = claimInstance(app, () => window);
 const settingsStore = new SettingsStore(app.getPath("userData"));
@@ -190,7 +192,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('core:sound-hotkeys', (_event, clips: unknown) => soundHotkeys.configure(clips));
   ipcMain.handle("core:pick-sound", async () => { const result = await dialog.showOpenDialog({ title: "Choose an event sound", properties: ["openFile"], filters: [{ name: "Audio", extensions: ["mp3", "wav", "ogg", "m4a", "aac", "flac", "webm"] }] }); return result.canceled ? null : result.filePaths[0] || null; });
   ipcMain.handle("core:pick-image", async () => { const result = await dialog.showOpenDialog({ title: "Choose an overlay image", properties: ["openFile"], filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp"] }] }); return result.canceled ? null : result.filePaths[0] || null; });
-  ipcMain.handle("core:info", async () => { const secure = getSecureOverlayInfo(); return { version: app.getVersion(), overlayUrl: secure.overlayUrl || `http://localhost:${OVERLAY_PORT}/overlay/gifts?v=24-repeat`, secure }; });
+  ipcMain.handle("core:info", async () => { const secure = getSecureOverlayInfo(); return { version: app.getVersion(), beta:betaBuild, overlayUrl: secure.overlayUrl || `http://localhost:${OVERLAY_PORT}/overlay/gifts?v=24-repeat`, secure }; });
   ipcMain.handle("core:tunnel-restart", async () => { const secure = await restartSecureTunnel(await tunnelConfig()); return { ...secure, overlayUrl: secure.overlayUrl || `http://localhost:${OVERLAY_PORT}/overlay/gifts?v=24-repeat` }; });
   ipcMain.handle("core:tunnel-configure", async (_event, value: string, hostnameValue: string) => {
     if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: "Windows encryption is unavailable." };

@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld("streamPulseCore", {
     status: () => ipcRenderer.invoke('video:status'),
     analyze: (id: string) => ipcRenderer.invoke('video:analyze', id),
     speechTools: () => ipcRenderer.invoke('video:speech-tools'),
+    speechStatus: () => ipcRenderer.invoke('video:speech-status'),
     transcribe: (args: unknown) => ipcRenderer.invoke('video:transcribe', args),
     search: (args: unknown) => ipcRenderer.invoke('video:search', args),
     montage: (args: unknown) => ipcRenderer.invoke('video:montage', args),

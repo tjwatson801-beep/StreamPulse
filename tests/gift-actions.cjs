@@ -22,3 +22,5 @@ const { giftWebhookUrl, luckyWheelUrl } = exportsObject;
 assert.equal(giftWebhookUrl(luckyWheelUrl, { user: 'Gold Fan & friends#1' }), 'http://localhost:5730/wheel?id=0&userName=Gold%20Fan%20%26%20friends%231');
 assert.equal(giftWebhookUrl(luckyWheelUrl, { user: '{gift}', giftName: 'Rose' }), 'http://localhost:5730/wheel?id=0&userName=%7Bgift%7D');
 console.log('Lucky Wheel sender substitution and URL encoding passed.');
+
+assert.equal(giftWebhookUrl('https://example.com/?name={nickname}&id={username}',{user:'real_handle',displayName:'Friendly ✨'}),'https://example.com/?name=Friendly%20%E2%9C%A8&id=real_handle');

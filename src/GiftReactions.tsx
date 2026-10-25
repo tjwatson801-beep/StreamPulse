@@ -11,6 +11,12 @@ type Props = {
 
 export default function GiftReactions({ settings, update, pickSound, preview }: Props) {
   const [search, setSearch] = useState("");
+  const [soundError, setSoundError] = useState("");
+  async function chooseDefaultSound() {
+    setSoundError("");
+    try { const soundPath = await pickSound(); if (soundPath) update(s => ({ ...s, defaultGiftSoundPath: soundPath })); }
+    catch (error) { setSoundError(error instanceof Error ? error.message : String(error)); }
+  }
   const options = giftOptions(settings);
   const change = (id: string, patch: Partial<GiftReaction>) => update(s => ({ ...s, reactions: s.reactions.map(r => r.id === id ? { ...r, ...patch } : r) }));
   async function chooseSound(id: string) { const soundPath = await pickSound(); if (soundPath) change(id, { soundPath }); }
@@ -53,6 +59,16 @@ export default function GiftReactions({ settings, update, pickSound, preview }: 
     </section>
     <section className="card form"><h2>Default gift response</h2>
       <label>Response for gifts without a configured reaction<input value={settings.defaultGiftTemplate} onChange={e => update(s => ({ ...s, defaultGiftTemplate: e.target.value }))}/></label>
+      <div className="form"><span id="default-gift-sound-label">Sound for gifts without a dedicated sound</span>
+        <div className="row" role="group" aria-labelledby="default-gift-sound-label">
+          <button onClick={chooseDefaultSound}>{settings.defaultGiftSoundPath ? "Change default gift sound" : "Choose default gift sound"}</button>
+          {settings.defaultGiftSoundPath && <><button onClick={() => preview(settings.defaultGiftSoundPath, "Default gift sound", settings.defaultGiftSoundVolume ?? 1).catch(error => setSoundError(String(error)))}>Preview default gift sound</button><button onClick={() => { setSoundError(""); update(s => ({ ...s, defaultGiftSoundPath: "" })); }}>Clear default gift sound</button></>}
+          <small title={settings.defaultGiftSoundPath}>{settings.defaultGiftSoundPath?.split(/[\\/]/).pop() || "No default sound selected"}</small>
+        </div>
+      </div>
+      <label>Default gift sound volume<input aria-label="Default gift sound volume" type="range" min="0" max="1" step="0.05" disabled={!settings.defaultGiftSoundPath} value={settings.defaultGiftSoundVolume ?? 1} onChange={e => update(s => ({ ...s, defaultGiftSoundVolume: Number(e.target.value) }))}/><small>{Math.round((settings.defaultGiftSoundVolume ?? 1) * 100)}% · also follows Sound master volume</small></label>
+      <small>This sound plays when a completed gift has no dedicated reaction sound. A matching sound action keeps priority. Clearing it turns off the fallback sound.</small>
+      {soundError && <p role="alert">{soundError}</p>}
       <small>Unconfigured gifts use this message for TTS and overlays. Disabling a configured reaction silences that gift. Turning off Reactions enabled silences all gift reactions.</small>
     </section>
     <section className="card"><h2>Your gift library</h2>

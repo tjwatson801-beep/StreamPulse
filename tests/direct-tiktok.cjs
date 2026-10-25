@@ -8,7 +8,7 @@ const emitted=[],decoder=new TikToolProvider('');
 decoder.onEvent(e=>emitted.push(e));
 function send(event,data){const n=normalizeDirectEvent(event,data);if(n)decoder.handle(n);}
 send('chat',{common:{msgId:'9007199254740993123'},user,content:'hello',emotes:[]});
-assert.equal(emitted[0].detail,'hello');assert.equal(emitted[0].user,'real_handle');
+assert.equal(emitted[0].displayName,'Display Name');assert.equal(emitted[0].detail,'hello');assert.equal(emitted[0].user,'real_handle');
 assert.equal(emitted[0].id,'9007199254740993123');
 assert.equal(emitted[0].isFollower,true);assert.equal(emitted[0].isSubscriber,true);
 send('chat',{common:{msgId:'9007199254740993124'},user,content:'hello',emotes:[]});

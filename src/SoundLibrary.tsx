@@ -34,7 +34,7 @@ export default function SoundLibrary({ settings, update, play, stop, playback, h
     ...settings.reactions.map(r => ({ id: `gift:${r.id}`, label: `Gift: ${r.giftName || 'Unnamed gift'}` })),
     ...settings.stickerReactions.map(r => ({ id: `sticker:${r.id}`, label: `Sticker: ${settings.stickerCatalog.find(s => s.id === r.stickerId)?.name || r.stickerId || 'Unnamed sticker'}` })),
     ...settings.superFans.map(r => ({ id: `fan:${r.id}`, label: `Super Fan: @${r.username}` })),
-    { id: 'follow', label: 'New follower' }, { id: 'superfan', label: 'Default Super Fan entrance' }
+    { id: 'gift-default', label: 'Default gift sound' }, { id: 'follow', label: 'New follower' }, { id: 'superfan', label: 'Default Super Fan entrance' }
   ];
   function assign() {
     if (!assignClip || !target) return;
@@ -43,6 +43,7 @@ export default function SoundLibrary({ settings, update, play, stop, playback, h
       reactions: current.reactions.map(r => `gift:${r.id}` === target ? { ...r, soundPath: path } : r),
       stickerReactions: current.stickerReactions.map(r => `sticker:${r.id}` === target ? { ...r, soundPath: path } : r),
       superFans: current.superFans.map(r => `fan:${r.id}` === target ? { ...r, soundPath: path } : r),
+      defaultGiftSoundPath: target === 'gift-default' ? path : current.defaultGiftSoundPath,
       followSoundPath: target === 'follow' ? path : current.followSoundPath,
       superFanSoundPath: target === 'superfan' ? path : current.superFanSoundPath
     }));

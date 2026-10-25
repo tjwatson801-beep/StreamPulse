@@ -36,7 +36,8 @@ export function setupMomentEngine(s:Services){
           if(process.platform!=='win32')throw Error('Visual text search currently requires Windows OCR.');
           scratch=await fs.mkdtemp(path.join(app.getPath('temp'),'golden-visual-'));
           const r=o.region;
-          const worker=app.isPackaged?path.join(process.resourcesPath,'visual-ocr.ps1'):path.join(__dirname,'..','resources','visual-ocr.ps1');
+          const resources=app.isPackaged?process.resourcesPath:__dirname.includes('.asar')?path.dirname(path.dirname(__dirname)):path.join(__dirname,'..','resources');
+          const worker=path.join(resources,'visual-ocr.ps1');
           let last:{category:string;time:number}|null=null;
           for(let start=0;start<source.duration;start+=60){
             s.check();const frames=path.join(scratch,'frames');await fs.mkdir(frames);

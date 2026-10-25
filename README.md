@@ -58,3 +58,11 @@ Give clips a friendly name, tags, or a favorite star. **Play** previews/triggers
 **Assign to alert** selects an existing gift reaction, sticker alert, or Super Fan profile, plus follower and default Super Fan sounds. Assignment updates the sound without changing the alert's enable switch. Create individual alert rules on their existing pages first.
 
 Sound master volume applies to all soundboard and event sounds, separately from TTS. **Allow overlap** preserves existing playback behavior; **Queue in order** waits for the current sound to end; **Interrupt current sound** replaces it. Changing modes stops current sounds. Queues keep up to 20 clips and skip clips waiting over 30 seconds. **Stop all sounds** clears both playing sounds and the queue, and is also available on the Live page. Names, tags, favorites, shortcuts, folder choice, and playback settings are included in settings backups; audio files remain in their folder.
+
+## Internal standalone beta candidate
+
+The separate beta.1 candidate is built with `npm run dist:beta` using `electron-builder.beta.json`. It bundles video tools, a private Python runtime, caption libraries and the speech model; these require no separate installation. The alpha installer described above still uses external video/speech prerequisites. The beta has its own settings directory, guided Setup page, Direct TikTok first-run selection and manual-only updates.
+
+Run `npm run beta:check` for the real bundled-caption/export test. Set `STREAMPULSE_TEST_PACKAGE` to the beta's packaged `resources/app.asar` to verify shipped files. Run the packaged production-main startup test with `tests/beta-main-smoke.cjs` and require its successful completion message (Electron may not propagate failure exit codes reliably in every harness).
+
+This candidate is internal and has not been installed, published or cleared for outside distribution. See BETA_READINESS.md and BETA_TESTER_GUIDE.md for exact checks and unresolved redistribution/fresh-Windows requirements. Do not copy personal settings or tunnel credentials into build resources.

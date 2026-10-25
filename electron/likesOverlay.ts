@@ -34,9 +34,10 @@ const img=document.createElement('img');img.alt='';img.referrerPolicy='no-referr
 img.onload=()=>{img.hidden=false};img.onerror=()=>{img.hidden=true};avatar.appendChild(img);
 }
 const leader=person.rank===1;row.classList.toggle('is-leader',leader);row.querySelector('.rank-number').textContent=String(person.rank).padStart(2,'0');row.querySelector('.rank-number').hidden=leader;row.querySelector('.crown').hidden=!leader;row.querySelector('.rank').setAttribute('aria-label',leader?'Rank 1: top liker':'Rank '+person.rank);
-row.querySelector('.name').textContent='@'+person.user;
+const displayName=typeof person.displayName==='string'&&person.displayName.trim()?person.displayName.trim():'';
+row.querySelector('.name').textContent=displayName||'@'+person.user;
 row.querySelector('.count').textContent=person.likes.toLocaleString();
-row.querySelector('.initial').textContent=Array.from(person.user)[0]?.toUpperCase()||'?';
+row.querySelector('.initial').textContent=Array.from(displayName||person.user)[0]?.toUpperCase()||'?';
 let url='';try{const parsed=new URL(person.profilePictureUrl);if(parsed.protocol==='https:'&&!parsed.username&&!parsed.password)url=parsed.href}catch{}
 const img=row.querySelector('img');
 if((img.dataset.url||'')!==url){img.dataset.url=url;img.hidden=true;if(url)img.src=url;else img.removeAttribute('src')}

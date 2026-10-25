@@ -1,0 +1,66 @@
+{
+  "appId": "com.streampulse.beta",
+  "productName": "StreamPulse Beta",
+  "directories": {
+    "output": "release-beta1"
+  },
+  "files": [
+    "dist/**/*",
+    "dist-electron/**/*",
+    "package.json"
+  ],
+  "extraResources": [
+    {
+      "from": "resources/visual-ocr.ps1",
+      "to": "visual-ocr.ps1"
+    },
+    {
+      "from": "resources/transcribe.py",
+      "to": "transcribe.py"
+    },
+    {
+      "from": "resources/cloudflared.exe",
+      "to": "cloudflared.exe"
+    },
+    {
+      "from": "resources/video-tools",
+      "to": "video-tools"
+    },
+    {
+      "from": "resources/caption-runtime",
+      "to": "caption-runtime",
+      "filter": [
+        "**/*",
+        "!**/__pycache__/**",
+        "!**/*.pyc",
+        "!**/bin/**"
+      ]
+    },
+    {
+      "from": "resources/third-party-notices",
+      "to": "third-party-notices"
+    }
+  ],
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "artifactName": "StreamPulse-Beta-Setup-${version}.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "deleteAppDataOnUninstall": false
+  },
+  "publish": null,
+  "extraMetadata": {
+    "version": "0.1.0-beta.1"
+  }
+}

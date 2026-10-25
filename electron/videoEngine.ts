@@ -8,6 +8,7 @@ import { randomUUID } from 'crypto';
 import { AudioEnergy, discoverVideoTools, hasVideoTools, suggestAudioHighlights, videoBinary } from './videoTools';
 import { captionAss, ClipEditing, framingFilter, validateEditing } from './videoEditing';
 import { setupMomentEngine } from './momentEngine';
+import { bundledCaptionRuntime, resolveCaptionRuntime } from './captionRuntime';
 
 export function validateClip(start: unknown, end: unknown, duration: number) {
   if (typeof start !== 'number' || typeof end !== 'number' || !Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end > duration + 0.05) throw Error('Choose a valid start and end within the recording.');
@@ -21,9 +22,34 @@ export function setupVideoEngine() {
   let server: Server | null = null;
   const recordings = new Map<string, {path: string; duration: number; hasAudio: boolean; width:number; height:number}>();
   const speechConfig = path.join(app.getPath('userData'), 'speech-tools.json');
+  const runtimeResources = app.isPackaged ? process.resourcesPath : __dirname.includes('.asar') ? path.dirname(path.dirname(__dirname)) : path.join(__dirname, '..', 'resources');
+  let speechCheck: Promise<{ready:boolean; bundled:boolean; error?:string}> | null = null;
+  ipcMain.handle('video:speech-status', () => {
+    if (speechCheck) return speechCheck;
+    if (busy) return {ready:false, bundled:Boolean(bundledCaptionRuntime(runtimeResources)), error:'Wait for the current video job before checking captions.'};
+    speechCheck = (async () => {
+      try {
+        const config = await resolveCaptionRuntime(runtimeResources, speechConfig);
+        const worker = app.isPackaged ? path.join(process.resourcesPath, 'transcribe.py') : path.join(runtimeResources, 'transcribe.py');
+        await new Promise<void>((resolve, reject) => {
+          const child = spawn(config.python, ['-I', '-B', worker, '--check', config.runtime], {windowsHide:true, shell:false, env:{...process.env, HF_HUB_OFFLINE:'1', HF_HUB_DISABLE_TELEMETRY:'1'}});
+          let errors='';
+          const timeout=setTimeout(()=>{child.kill();reject(Error('Caption check timed out. Restart StreamPulse and try again.'));},60000);
+          child.stdout.on('data',()=>{}); child.stderr.on('data',chunk=>errors=(errors+chunk).slice(-2000));
+          child.once('error',()=>{clearTimeout(timeout);reject(Error('The caption runtime could not start. Reinstall the complete beta.'));});
+          child.once('close',code=>{clearTimeout(timeout);code===0?resolve():reject(Error('Caption runtime check failed: '+errors));});
+        });
+        return {ready:true, bundled:config.bundled};
+      } catch(error) { return {ready:false, bundled:Boolean(bundledCaptionRuntime(runtimeResources)), error:error instanceof Error?error.message:String(error)}; }
+    })();
+    void speechCheck.then(result=>{if(!result.ready)speechCheck=null;});
+    return speechCheck;
+  });
   const editedPreviews: {id:string;directory:string}[]=[];
   ipcMain.handle('video:speech-tools', async () => {
     if (busy) throw Error('Wait for the current video job.');
+    if (bundledCaptionRuntime(runtimeResources)) return runtimeResources;
+    speechCheck = null;
     const python = await dialog.showOpenDialog({title:'Choose Python with faster-whisper support',properties:['openFile'],filters:[{name:'Python executable',extensions:['exe']}]});
     if(python.canceled)return null;
     const runtime = await dialog.showOpenDialog({title:'Choose local speech runtime (speech-libs and speech-models)',properties:['openDirectory']});
@@ -34,12 +60,11 @@ export function setupVideoEngine() {
     return runtime.filePaths[0];
   });
   async function speechWords(sourcePath:string,start:number,length:number) {
-    let config:{python:string;runtime:string};
-    try{config=JSON.parse(await fs.readFile(speechConfig,'utf8'));}catch{throw Error('Set up local captions first. Choose your Python executable and speech runtime folder.');}
+    const config = await resolveCaptionRuntime(runtimeResources, speechConfig);
       await loadFolder();
-      const worker=app.isPackaged?path.join(process.resourcesPath,'transcribe.py'):path.join(__dirname,'..','resources','transcribe.py');
+      const worker=path.join(runtimeResources,'transcribe.py');
       const output=await new Promise<string>((resolve,reject)=>{
-        const child=spawn(config.python,[worker,tool('ffmpeg'),sourcePath,String(start),String(length),config.runtime],{windowsHide:true,shell:false,env:{...process.env,PYTHONPATH:path.join(config.runtime,'speech-libs')}});
+        const child=spawn(config.python,['-I','-B',worker,tool('ffmpeg'),sourcePath,String(start),String(length),config.runtime],{windowsHide:true,shell:false,env:{...process.env,HF_HUB_OFFLINE:'1',HF_HUB_DISABLE_TELEMETRY:'1'}});
         active=child;let out='',err='';
         child.stdout.on('data',c=>out=(out+c).slice(-2000000));child.stderr.on('data',c=>err=(err+c).slice(-4000));
         child.on('error',()=>reject(Error('Python could not start. Set up local captions again.')));
@@ -60,7 +85,7 @@ export function setupVideoEngine() {
     if (folderLoaded) return;
     let saved = '';
     try { const config = JSON.parse(await fs.readFile(configPath, 'utf8')); if (typeof config.folder === 'string') saved = config.folder; } catch {}
-    folder = saved && hasVideoTools(saved) ? saved : await discoverVideoTools(app.getPath('downloads'), process.resourcesPath);
+    folder = saved && hasVideoTools(saved) ? saved : await discoverVideoTools(app.getPath('downloads'), runtimeResources);
     folderLoaded = true;
   }
   const tool = (name: string) => {

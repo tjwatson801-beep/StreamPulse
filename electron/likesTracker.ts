@@ -1,6 +1,6 @@
 import { LiveEvent } from "./providers/LiveProvider";
 
-export type LikeRow = { user: string; profilePictureUrl?: string; likes: number; rank: number };
+export type LikeRow = { user: string; displayName?: string; profilePictureUrl?: string; likes: number; rank: number };
 export type LikesSnapshot = { type: "likes-leaderboard"; streamer: string; roomId: string; startedAt: string; totalLikes: number | null; trackedLikes: number; viewers: number; leaders: LikeRow[] };
 
 export class LikesTracker {
@@ -9,7 +9,7 @@ export class LikesTracker {
   private startedAt = new Date().toISOString();
   private totalLikes: number | null = null;
   private trackedLikes = 0;
-  private people = new Map<string, { user: string; profilePictureUrl?: string; likes: number }>();
+  private people = new Map<string, { user: string; displayName?: string; profilePictureUrl?: string; likes: number }>();
   private seen = new Set<string>();
 
   confirmRoom(streamer: string, roomId: string) {
@@ -52,7 +52,7 @@ export class LikesTracker {
         if (url.protocol === "https:" && !url.username && !url.password) profilePictureUrl = url.href;
       }
     } catch { /* Keep the last usable picture when an event omits or has an invalid URL. */ }
-    this.people.set(key, { user, profilePictureUrl, likes: Math.min(Number.MAX_SAFE_INTEGER, (existing?.likes || 0) + count) });
+    this.people.set(key, { user, displayName: event.displayName?.trim() || existing?.displayName, profilePictureUrl, likes: Math.min(Number.MAX_SAFE_INTEGER, (existing?.likes || 0) + count) });
     this.trackedLikes = Math.min(Number.MAX_SAFE_INTEGER, this.trackedLikes + count);
     return true;
   }

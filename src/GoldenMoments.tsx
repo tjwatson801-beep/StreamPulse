@@ -14,6 +14,7 @@ export type VideoApi = {
   tools: () => Promise<string | null>;
   import: () => Promise<Recording | null>;
   speechTools: () => Promise<string|null>;
+  speechStatus: () => Promise<{ready:boolean; bundled:boolean; error?:string}>;
   search: (args:unknown) => Promise<{highlights:SearchMoment[];message:string}>;
   montage: (args:unknown) => Promise<string[]|null>;
   preview: (args:unknown) => Promise<{url:string;duration:number}>;
@@ -28,7 +29,7 @@ export default function GoldenMoments() {
   const [start, setStart] = useState(0), [end, setEnd] = useState(30);
   const [framing, setFraming] = useState('fit');
   const [cameraFocus,setCameraFocus]=useState(false),[audioPolish,setAudioPolish]=useState(true);
-  const [font,setFont]=useState('Bauhaus 93'),[wordHighlight,setWordHighlight]=useState(true);
+  const [font,setFont]=useState('Segoe UI'),[wordHighlight,setWordHighlight]=useState(true);
   const [captions,setCaptions]=useState<CaptionWord[]>([]),[captionRange,setCaptionRange]=useState('');
   const [transcribing,setTranscribing]=useState(false);
   const captionsCurrent=captionRange===`${recording?.id}:${start}:${end}`;
@@ -41,6 +42,9 @@ export default function GoldenMoments() {
   const [previewing,setPreviewing]=useState(false);
   useEffect(()=>{setEditedPreview(null);},[recording?.id,start,end,framing,cameraFocus,audioPolish,captions,font,wordHighlight]);
   const [cuts,setCuts]=useState<MontageCut[]>([]),[momentFilter,setMomentFilter]=useState('all');
+  const [captionStatus,setCaptionStatus]=useState('Checking local captions…');
+  const [bundledCaptions,setBundledCaptions]=useState(false);
+  useEffect(()=>{let disposed=false;void api?.speechStatus?.().then(result=>{if(disposed)return;setBundledCaptions(result.bundled);setCaptionStatus(result.ready?'Local captions ready — no extra installation needed':result.error||'Local captions unavailable');}).catch(()=>{if(!disposed)setCaptionStatus('Local captions could not be checked.');});return()=>{disposed=true;};},[api]);
   const [toolsStatus, setToolsStatus] = useState('Checking video tools…');
   const [progress, setProgress] = useState(0), [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -78,7 +82,7 @@ export default function GoldenMoments() {
     <header><div><small>RECORDING TO CLIP</small><h1>Golden Moments</h1><p>Find a moment, trim it, and export a shareable MP4.</p></div></header>
     <section className="card form">
       <p role="status">{toolsStatus}</p>
-      <div className="row"><button disabled={busy} onClick={() => action(async () => { const item = await api!.import(); if (item) {setRecording(item); setCuts([]); setMomentFilter("all"); setHighlights([]); setReviewedMoment(null); setCaptions([]); setCameraFocus(false); setStart(0); setEnd(Math.min(30, item.duration)); playingClip.current = false;} })}>Import recording</button><button disabled={busy} onClick={() => action(async () => { const folder = await api!.tools(); if (folder) {setToolsStatus('Video tools ready'); setMessage('Video tools folder saved for future sessions.');} })}>Choose video tools folder</button></div>
+      <div className="row"><button disabled={busy} onClick={() => action(async () => { const item = await api!.import(); if (item) {setRecording(item); setCuts([]); setMomentFilter("all"); setHighlights([]); setReviewedMoment(null); setCaptions([]); setCameraFocus(false); setStart(0); setEnd(Math.min(30, item.duration)); playingClip.current = false;} })}>Import recording</button><details><summary>Advanced tools</summary><button disabled={busy} onClick={() => action(async () => { const folder = await api!.tools(); if (folder) {setToolsStatus('Video tools ready'); setMessage('Video tools folder saved for future sessions.');} })}>Choose video tools folder</button></details></div>
       <small>Recordings are processed on this computer. MP4, MOV, MKV and WebM can be imported; preview support depends on the video codec.</small>
       {error && <p className="warning" role="alert">{error}</p>}
       {message && <p role="status">{message}</p>}
@@ -104,8 +108,8 @@ export default function GoldenMoments() {
         <label><input type="checkbox" checked={cameraFocus} disabled={busy || Math.abs(recording.width/recording.height-9/16)>0.02} onChange={e=>setCameraFocus(e.target.checked)}/> Camera focus — larger camera, gameplay underneath</label>
         <small>For vertical recordings with your camera in the top third. The camera layout and burned captions appear in the exported video; this player shows the source.</small>
         <label><input type="checkbox" checked={audioPolish} disabled={busy || !recording.hasAudio} onChange={e=>setAudioPolish(e.target.checked)}/> Polish audio volume</label>
-        <div className="row"><button disabled={busy} onClick={()=>action(async()=>{if(await api!.speechTools())setMessage('Local caption runtime saved.');})}>Set up local captions</button><button disabled={busy || !valid || !recording.hasAudio} onClick={()=>action(async()=>{setTranscribing(true);const result=await api!.transcribe({id:recording.id,start,end});setCaptions(result);setCaptionRange(`${recording.id}:${start}:${end}`);setMessage(result.length?'Captions generated. Review wording and word times before export.':'No speech found in this clip.');})}>Generate captions for clip</button></div>
-        <small>Captions run locally using Python and the small.en speech model. Times below are seconds from the start of your selected clip.</small>
+        <div className="row">{!bundledCaptions&&<button disabled={busy} onClick={()=>action(async()=>{if(await api!.speechTools())setMessage('Local caption runtime saved.');})}>Set up local captions</button>}<button disabled={busy || !valid || !recording.hasAudio} onClick={()=>action(async()=>{setTranscribing(true);const result=await api!.transcribe({id:recording.id,start,end});setCaptions(result);setCaptionRange(`${recording.id}:${start}:${end}`);setMessage(result.length?'Captions generated. Review wording and word times before export.':'No speech found in this clip.');})}>Generate captions for clip</button></div>
+        <small>{captionStatus}. Recordings stay on this computer. Caption times are measured from the start of your selected clip.</small>
         <label>Caption font<select disabled={busy} value={font} onChange={e=>setFont(e.target.value)}><option value="Bauhaus 93">Bauhaus 93 — chunky rounded</option><option value="Arial Rounded MT Bold">Arial Rounded — soft bold</option><option value="Impact">Impact — tall and bold</option><option value="Cooper Black">Cooper Black — retro rounded</option><option value="Berlin Sans FB Demi">Berlin Sans — playful</option><option value="Showcard Gothic">Showcard Gothic — comic style</option><option value="Arial">Arial — classic bold</option><option value="Segoe UI">Segoe UI — clean bold</option></select></label>
         <div aria-label="Caption font sample" style={{background:'#080c12',padding:'16px',borderRadius:8,textAlign:'center',fontFamily:`"${font}", sans-serif`,fontWeight:700,fontSize:28,color:'white',textShadow:'2px 2px 0 #000,-2px -2px 0 #000'}}>Stay <span style={{color:wordHighlight?'#ffd700':'white'}}>Golden!</span></div>
         <small>Font sample updates as you choose. Fonts must be installed on this computer; unavailable fonts use a fallback.</small>

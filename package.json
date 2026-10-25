@@ -1,6 +1,6 @@
 {
   "name": "streampulse-core",
-  "version": "0.1.0-alpha.53",
+  "version": "0.1.0-alpha.56",
   "private": true,
   "description": "StreamPulse Core - focused TikTok LIVE Studio reactions and TTS",
   "author": "StreamPulse",
@@ -12,7 +12,10 @@
     "pack:win": "npm run build && electron-builder --win --dir",
     "dist:win": "npm run build && electron-builder --win nsis",
     "release:check": "npm run build && tsc --noEmit && node scripts/release-check.cjs",
-    "video:check": "node scripts/video-check.cjs"
+    "video:check": "node scripts/video-check.cjs",
+    "dist:beta": "npm run build && node scripts/beta-preflight.cjs && electron-builder --win nsis --config electron-builder.beta.json --publish never",
+    "pack:beta": "npm run build && node scripts/beta-preflight.cjs && electron-builder --win --dir --config electron-builder.beta.json --publish never",
+    "beta:check": "node scripts/beta-check.cjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",
@@ -47,7 +50,15 @@
       "dist-electron/**/*",
       "package.json"
     ],
-    "extraResources": [{"from":"resources/visual-ocr.ps1","to":"visual-ocr.ps1"},{"from":"resources/transcribe.py","to":"transcribe.py"},
+    "extraResources": [
+      {
+        "from": "resources/visual-ocr.ps1",
+        "to": "visual-ocr.ps1"
+      },
+      {
+        "from": "resources/transcribe.py",
+        "to": "transcribe.py"
+      },
       {
         "from": "resources/cloudflared.exe",
         "to": "cloudflared.exe"

@@ -1,6 +1,6 @@
 export type Audience = "everyone" | "followers" | "subscribers";
 export type LiveEvent = {
-  id: string; type: "Chat" | "Gift" | "Follow" | "Join" | "SuperFanJoin" | "Sticker" | "Like"; user: string; detail: string; time: string;
+  id: string; type: "Chat" | "Gift" | "Follow" | "Join" | "SuperFanJoin" | "Sticker" | "Like"; user: string; displayName?: string; detail: string; time: string;
   profilePictureUrl?: string; likeCount?: number; totalLikeCount?: number; giftName?: string; giftImageUrl?: string; stickerId?: string; stickerImageUrl?: string; stickerName?: string; count?: number; comboComplete?: boolean;
   followRole?: number; isFollower?: boolean; isSubscriber?: boolean;
 };

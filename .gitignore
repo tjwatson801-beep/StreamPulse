@@ -19,3 +19,7 @@ work/
 Streampulsebuildnotes.txt
 
 local-caption-runtime/
+
+resources/caption-runtime/
+resources/video-tools/
+resources/third-party-notices/
