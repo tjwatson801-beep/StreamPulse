@@ -16,6 +16,7 @@ function setup() {
     clearTimeout: id => timers.delete(id),
     readKey: async () => 'test',
     likesTracker: { startStream() {} },
+    credits: { confirmRoom() {} }, liveRoomId: "",
     TikFinityProvider: class { onEvent() {} onStatus() {} async connect() { throw new Error('Unexpected server response: 429'); } }
   });
   vm.runInContext(ts.transpileModule(functions, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText, context);
