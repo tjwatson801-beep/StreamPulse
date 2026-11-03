@@ -11,6 +11,38 @@ import { WebSocket, WebSocketServer } from "ws";
 export const OVERLAY_PORT = 17890;
 let server: http.Server | null = null;
 let wss: WebSocketServer | null = null;
+const creditsSourceKey = randomUUID();
+let creditsPlayback = { id: "", html: "" };
+export function setCreditsPlayback(html: string) {
+  creditsPlayback = { id: randomUUID(), html };
+}
+export function creditsSourcePath() { return "/overlay/credits/" + creditsSourceKey; }
+
+const creditsSourceHtml = `<!doctype html><html lang="en"><meta charset="utf-8"><title>xGOLDx Outro Source</title>
+<style>html,body{margin:0;overflow:hidden}iframe{width:100vw;height:100vh;border:0}</style>
+<iframe hidden title="Stream credits" sandbox="allow-scripts"></iframe><script>
+const frame = document.querySelector("iframe");
+let id;
+async function poll() {
+  try {
+    const response = await fetch(location.pathname + "/playback", {cache:"no-store",signal:AbortSignal.timeout(5000)});
+    if (!response.ok) throw new Error("Source unavailable");
+    const playback = await response.json();
+    if (playback.id !== id) {
+      id = playback.id;
+      frame.hidden = !playback.html;
+      frame.srcdoc = playback.html;
+    }
+  } catch {
+    frame.hidden = true;
+    id = undefined;
+  } finally {
+    setTimeout(poll, 500);
+  }
+}
+poll();
+</script></html>`;
+
 export const likesTracker = new LikesTracker();
 export const overlayLibrary = new OverlayLibrary();
 export function processLibraryEvent(event: LiveEvent, before = 0, after = 0) {
@@ -148,6 +180,8 @@ export async function startOverlayServer(port = OVERLAY_PORT) {
     app.use(express.json({ limit: "64kb" }));
     app.get("/fonts/PermanentMarker-Regular.ttf", (_req, res) => res.sendFile(path.join(__dirname, "../dist/fonts/PermanentMarker-Regular.ttf")));
     app.get("/health", (_req, res) => res.json({ ok: true, app: "StreamPulse Core" }));
+    app.get(creditsSourcePath(), (_req, res) => res.set("Cache-Control", "no-store").type("html").send(creditsSourceHtml));
+    app.get(creditsSourcePath() + "/playback", (_req, res) => res.set("Cache-Control", "no-store").json(creditsPlayback));
     app.get("/overlay/likes", (_req, res) => res.set("Cache-Control", "no-store").type("html").send(likesOverlayHtml));
     app.get("/overlay/superfans", (_req, res) => res.set("Cache-Control", "no-store").type("html").send(queuedOverlayHtml("superfan")));
     app.get("/overlay/gifts", (_req, res) => res.set("Cache-Control", "no-store").type("html").send(queuedOverlayHtml()));

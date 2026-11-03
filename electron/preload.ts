@@ -1,6 +1,17 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("streamPulseCore", {
+  credits: {
+    source: () => ipcRenderer.invoke("credits:source"),
+    state: () => ipcRenderer.invoke("credits:state"),
+    start: () => ipcRenderer.invoke("credits:start"),
+    stop: () => ipcRenderer.invoke("credits:stop"),
+    history: () => ipcRenderer.invoke("credits:history"),
+    save: (value: unknown) => ipcRenderer.invoke("credits:save", value),
+    preview: (value: unknown) => ipcRenderer.invoke("credits:preview", value),
+    show: (value: unknown) => ipcRenderer.invoke("credits:show", value),
+    hide: () => ipcRenderer.invoke("credits:hide"),
+  },
   video: {
     status: () => ipcRenderer.invoke('video:status'),
     analyze: (id: string) => ipcRenderer.invoke('video:analyze', id),

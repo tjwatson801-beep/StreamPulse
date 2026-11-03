@@ -1,3 +1,5 @@
+import { CreditsHistory, CreditsTracker, validateCredits } from "./credits";
+import { creditsOutro } from "./creditsOutro";
 import { setupVideoEngine } from './videoEngine';
 import { flushRendererSettings } from './settingsFlush';
 import { claimInstance } from './singleInstance';
@@ -14,13 +16,17 @@ import path from "path";
 import { LiveEvent, LiveProvider, ProviderStatus } from "./providers/LiveProvider";
 import { DirectTikTokProvider } from "./providers/DirectTikTokProvider";
 import { TikFinityProvider } from "./providers/TikFinityProvider";
-import { OVERLAY_PORT, processLibraryEvent, setLikesAppearance, likesTracker, publishLikes, showOverlayAlert, startOverlayServer, stopOverlayServer } from "./overlayServer";
+import { OVERLAY_PORT, creditsSourcePath, processLibraryEvent, setLikesAppearance, likesTracker, publishLikes, setCreditsPlayback, showOverlayAlert, startOverlayServer, stopOverlayServer } from "./overlayServer";
 import { extractTunnelToken, getSecureOverlayInfo, normalizeHostname, restartSecureTunnel, startSecureTunnel, stopSecureTunnel } from "./secureTunnel";
 
 const betaBuild = /-beta\./.test(app.getVersion());
 if (betaBuild) { app.setName('StreamPulse Beta'); const betaData = path.join(app.getPath('appData'), 'StreamPulse Beta'); mkdirSync(betaData, {recursive:true}); app.setPath('userData', betaData); }
 let window: BrowserWindow | null = null;
 const primaryInstance = claimInstance(app, () => window);
+const credits = new CreditsTracker();
+const creditsHistory = new CreditsHistory(path.join(app.getPath("userData"), "credits-history"));
+let creditsRoster = new Set<string>();
+let liveRoomId = "";
 const settingsStore = new SettingsStore(app.getPath("userData"));
 const soundHotkeys = new SoundHotkeys(globalShortcut, soundPath => send('core:sound-hotkey', soundPath));
 app.on('will-quit', () => soundHotkeys.clear());
@@ -92,9 +98,10 @@ function scheduleReconnect() {
   reconnectTimer = setTimeout(() => { reconnectTimer = null; void connectProvider(activeUsername, true); }, delay);
 }
 function bind(current: LiveProvider) {
-  current.onRoom?.(roomId => { if (current !== provider) return; likesTracker.startStream(activeUsername, roomId); publishLikes(); });
+  current.onRoom?.(roomId => { if (current !== provider) return; liveRoomId = roomId; credits.confirmRoom(activeUsername, roomId); likesTracker.startStream(activeUsername, roomId); publishLikes(); });
   current.onEvent((event: LiveEvent) => {
     if (current !== provider) return;
+    credits.add(event, creditsRoster);
     if (event.type === "Like") { const before = likesTracker.viewerLikes(event.user); if (likesTracker.add(event)) { publishLikes(); processLibraryEvent(event, before, likesTracker.viewerLikes(event.user)); } return; }
     if (event.type === "Gift") processLibraryEvent(event);
     send("core:event", event);
@@ -114,6 +121,8 @@ async function connectProvider(username: string, reconnecting = false) {
     await disconnect(false);
     if (revision !== connectRevision) return { ok: false, error: "Connection cancelled" };
     const current = activeProviderKind === "direct" ? new DirectTikTokProvider(diagnosticLog) : new TikFinityProvider(diagnosticLog); provider = current; bind(current);
+    if (!reconnecting) liveRoomId = "";
+    credits.confirmRoom(username, "");
     likesTracker.startStream(username, "");
     await current.connect(username); return revision === connectRevision ? { ok: true } : { ok: false, error: "Connection cancelled" };
   } catch (error) {
@@ -125,8 +134,15 @@ async function connectProvider(username: string, reconnecting = false) {
   }
 }
 
+function applySettings(state: Parameters<typeof setLikesAppearance>[0] & { superFans?: unknown }) {
+  setLikesAppearance(state);
+  creditsRoster = new Set(Array.isArray(state.superFans) ? state.superFans
+    .filter(profile => profile?.enabled && typeof profile.username === "string")
+    .map(profile => profile.username.trim().replace(/^@/, "").toLowerCase()) : []);
+}
+
 async function createWindow() {
-  try { setLikesAppearance(JSON.parse(await fs.readFile(statePath(), "utf8"))); } catch { setLikesAppearance({}); }
+  try { applySettings(JSON.parse(await fs.readFile(statePath(), "utf8"))); } catch { setLikesAppearance({}); }
   await startOverlayServer();
   await startSecureTunnel(await tunnelConfig());
   window = new BrowserWindow({ width: 1180, height: 780, minWidth: 940, minHeight: 620, backgroundColor: "#080c12", title: "StreamPulse Core", webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false, autoplayPolicy: "no-user-gesture-required" } });
@@ -157,7 +173,7 @@ app.whenReady().then(async () => {
     const answer = await dialog.showMessageBox({type:'question',buttons:['Cancel','Restore'],defaultId:0,cancelId:0,message:'Restore this settings backup?',detail:'Current settings will be backed up first. Restart StreamPulse afterward if your connection or tunnel settings changed.'});
     if(answer.response!==1)return {cancelled:true};
     if(reconnectEnabled)return {error:'Disconnect from LIVE before restoring.'};
-    const state=await settingsStore.restore(id);setLikesAppearance(state);return {state};
+    const state=await settingsStore.restore(id);applySettings(state);return {state};
   });
   let healthPending: Promise<unknown> | null = null;
   ipcMain.handle('core:health', () => {
@@ -167,8 +183,22 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle("core:likes-reset", async () => { likesTracker.reset(); publishLikes(); return { ok: true }; });
   ipcMain.handle("core:webhook", (_event, args: unknown) => sendWebhook(args));
+  ipcMain.handle("credits:source", () => creditsSourcePath());
+  ipcMain.handle("credits:state", () => ({ session: credits.snapshot(), collecting: credits.active }));
+  ipcMain.handle("credits:start", () => credits.start(provider ? activeUsername : "", provider ? liveRoomId : ""));
+  ipcMain.handle("credits:stop", () => credits.stop());
+  ipcMain.handle("credits:history", () => creditsHistory.list());
+  ipcMain.handle("credits:save", async (_event, value: unknown) => {
+    const session = validateCredits(value);
+    if (credits.active && credits.snapshot()?.id === session.id) throw new Error("Stop tracking before saving.");
+    await creditsHistory.save(session);
+    credits.finish(session.id);
+  });
+  ipcMain.handle("credits:preview", (_event, value: unknown) => creditsOutro(validateCredits(value)));
+  ipcMain.handle("credits:show", (_event, value: unknown) => setCreditsPlayback(creditsOutro(validateCredits(value))));
+  ipcMain.handle("credits:hide", () => setCreditsPlayback(""));
   ipcMain.handle("core:load", async () => { try { return await settingsStore.load(); } catch { return { settingsLoadError: "Settings could not be read. Restore a backup in Settings before making changes." }; } });
-  ipcMain.handle("core:save", async (_event, state: unknown) => { await settingsStore.save(state); setLikesAppearance(state as { likesBackgroundOpacity?: unknown; likesShowBorder?: unknown }); return { ok: true }; });
+  ipcMain.handle("core:save", async (_event, state: unknown) => { await settingsStore.save(state); applySettings(state as Parameters<typeof applySettings>[0]); return { ok: true }; });
   ipcMain.handle("core:credential-status", async () => ({ hasCredential: Boolean(await readKey()), hasTunnelCredential: Boolean(await readTunnelToken()) }));
   ipcMain.handle("core:credential-save", async (_event, value: string) => { if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: "Windows encryption is unavailable." }; await fs.mkdir(path.dirname(secretPath()), { recursive: true }); await fs.writeFile(secretPath(), safeStorage.encryptString(String(value).trim())); return { ok: true }; });
   ipcMain.handle("core:connect", async (_event, username: string, mode?: string) => {
