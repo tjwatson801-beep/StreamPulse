@@ -1,0 +1,8 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os');
+const {bundledCaptionRuntime,resolveCaptionRuntime}=require('../dist-electron/captionRuntime');
+const root=fs.mkdtempSync(path.join(os.tmpdir(),'caption-runtime-'));
+(async()=>{const savedFile=path.join(root,'settings.json');assert.equal(bundledCaptionRuntime(root),null);await assert.rejects(resolveCaptionRuntime(root,savedFile),/Local captions are unavailable/);
+const external=path.join(root,'external');fs.mkdirSync(path.join(external,'speech-libs'),{recursive:true});fs.mkdirSync(path.join(external,'speech-models'));const python=path.join(external,'python.exe');fs.writeFileSync(python,'');fs.writeFileSync(savedFile,JSON.stringify({python,runtime:external}));assert.equal((await resolveCaptionRuntime(root,savedFile)).bundled,false);
+const bundled=path.join(root,'caption-runtime');for(const file of ['python/python.exe','speech-libs/faster_whisper/__init__.py','model/model.bin','model/config.json','model/tokenizer.json','model/vocabulary.txt']){const name=path.join(bundled,file);fs.mkdirSync(path.dirname(name),{recursive:true});fs.writeFileSync(name,'');}
+assert.equal((await resolveCaptionRuntime(root,savedFile)).runtime,bundled,'Bundled runtime overrides stale personal paths');fs.unlinkSync(path.join(bundled,'model/model.bin'));assert.equal(bundledCaptionRuntime(root),null);assert.equal((await resolveCaptionRuntime(root,savedFile)).runtime,external);
+console.log('Caption runtime passed: complete bundle, missing model rejection, saved runtime fallback and bundle precedence.');})().catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>fs.rmSync(root,{recursive:true,force:true}));

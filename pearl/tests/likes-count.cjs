@@ -1,0 +1,2 @@
+const assert=require('assert/strict');const {validateSettings}=require('../dist-electron/settingsValidation');
+assert.doesNotThrow(()=>validateSettings({}));for(let count=3;count<=10;count++)assert.doesNotThrow(()=>validateSettings({likesTopCount:count}));for(const value of [2,11,3.5,NaN,'5',null])assert.throws(()=>validateSettings({likesTopCount:value}));console.log('Top liker count validation passed: old settings, all 3–10 counts, integer/type/range bounds.');

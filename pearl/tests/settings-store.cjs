@@ -1,0 +1,25 @@
+const assert=require('node:assert/strict'),fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path');
+const {SettingsStore}=require('../dist-electron/settingsStore');
+(async()=>{
+ const root=await fs.mkdtemp(path.join(os.tmpdir(),'streampulse-backup-test-'));const store=new SettingsStore(root);
+ const original={username:'Test',defaultGiftSoundPath:'C:/sounds/default.wav',defaultGiftSoundVolume:0.4,likesTextColor:'#123456',likesCountColor:'#abcdef',likesLeaderColor:'#fedcba',giftActions:[{id:'rose',giftName:'Rose',enabled:true,minimumCount:1,kind:'webhook',message:'',soundPath:'',imagePath:'',volume:1,durationMs:4000,webhookUrl:'http://localhost:5730/wheel'}],reactions:[]};
+ await store.save(original);const id=await store.backup('Manual test');
+ await Promise.all([store.save({...original,username:'First'}),store.save({...original,username:'Last'})]);
+ assert.equal((await store.load()).username,'Last');
+ assert.deepEqual(await store.restore(id),original);
+ assert.equal((await store.list()).some(b=>b.reason==='Before restore'),true);
+ await assert.rejects(store.restore('../settings.json'));
+ await assert.rejects(store.save({reactions:'broken'}));
+ for(const invalid of [{superFans:[null]},{giftActions:[{id:'bad'}]},{reactions:[{id:'bad',giftName:42}]},{overlayLibrary:{likes:null}},{username:42},{volume:NaN}]) await assert.rejects(store.save(invalid));
+ assert.deepEqual(await store.load(),original);
+ const badId='1999999999999-aaaa.json';await fs.writeFile(path.join(root,'backups',badId),JSON.stringify({format:1,settings:{superFans:[null]}}));
+ await assert.rejects(store.restore(badId));assert.deepEqual(await store.load(),original);
+ assert.ok(!(await store.list()).some(b=>b.id===badId));await fs.unlink(path.join(root,'backups',badId));
+ await fs.writeFile(path.join(root,'settings.json'),'broken json');
+ await assert.rejects(store.save({}));assert.equal(await fs.readFile(path.join(root,'settings.json'),'utf8'),'broken json');
+ await store.restore(id);assert.deepEqual(await store.load(),original);
+ assert.ok((await fs.readdir(root)).some(n=>n.includes('.damaged-')));
+ for(let i=0;i<25;i++)await store.backup('Retention');assert.equal((await store.list()).length,20);
+ assert.ok(!(await fs.readdir(root)).some(n=>n.endsWith('.tmp')));
+ console.log('Passed: serialized atomic saves, snapshots, restore, corruption recovery, path validation, and 20-backup retention.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

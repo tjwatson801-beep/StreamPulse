@@ -1,0 +1,53 @@
+const {app,BrowserWindow,ipcMain}=require('electron');
+const path=require('node:path');const fs=require('node:fs/promises');const assert=require('node:assert/strict');
+app.setPath('userData',path.join(app.getPath('temp'),'streampulse-soundboard-ui'));
+let stored;
+ipcMain.handle('test:load-sounds',(_,initial)=>stored || initial);
+ipcMain.handle('test:save-sounds',(_,value)=>{stored=value;});
+app.whenReady().then(async()=>{let win;try{
+ const folder=await fs.mkdtemp(path.join(app.getPath('temp'),'streampulse-soundboard-audio-'));process.env.STREAMPULSE_TEST_SOUNDS_FOLDER=folder;
+ const rate=16000,count=rate*4,wav=Buffer.alloc(44+count*2);wav.write('RIFF',0);wav.writeUInt32LE(wav.length-8,4);wav.write('WAVEfmt ',8);wav.writeUInt32LE(16,16);wav.writeUInt16LE(1,20);wav.writeUInt16LE(1,22);wav.writeUInt32LE(rate,24);wav.writeUInt32LE(rate*2,28);wav.writeUInt16LE(2,32);wav.writeUInt16LE(16,34);wav.write('data',36);wav.writeUInt32LE(count*2,40);for(let i=0;i<count;i++)wav.writeInt16LE(Math.round(2000*Math.sin(2*Math.PI*440*i/rate)),44+i*2);await fs.writeFile(path.join(folder,'chiptune.wav'),wav);await fs.writeFile(path.join(folder,'welcome.wav'),wav);
+ win=new BrowserWindow({show:false,width:1180,height:1000,webPreferences:{preload:path.join(__dirname,'soundboard-preload.cjs'),contextIsolation:true,sandbox:false,backgroundThrottling:false,autoplayPolicy:'no-user-gesture-required'}});
+ await win.loadFile(path.join(__dirname,'../dist/index.html'));
+ const run=async code=>{const result=await win.webContents.executeJavaScript(`(async()=>{try{return await eval(${JSON.stringify(code)})}catch(e){return {testError:e.stack}}})()`);if(result?.testError)throw Error(code+'\n'+result.testError);return result;};
+ async function wait(code){for(let i=0;i<100;i++){if(await run(code))return;await new Promise(r=>setTimeout(r,100));}throw Error('Timed out: '+code);}
+ async function input(selector,value,event='input'){await wait(`document.querySelector(${JSON.stringify(selector)})!==null`);await run(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(${event==='change'?'HTMLSelectElement':'HTMLInputElement'}.prototype,'value').set.call(el,${JSON.stringify(value)});el.dispatchEvent(new Event('${event}',{bubbles:true}));})()`);}
+ await wait("document.querySelector('aside')!==null");
+ await run("Array.from(document.querySelectorAll('aside button')).find(b=>b.textContent==='Sound Library').click()");
+ await wait("document.querySelectorAll('.sound-tile').length===2");
+ await input('.sound-tile input','My chiptune');await wait("document.querySelector('.sound-tile input').value==='My chiptune'");
+ await input('.sound-tile input[placeholder="funny, entrance, chiptune"]','retro');
+ await input('.sound-tile input[placeholder="Ctrl+Alt+1"]','Ctrl+Alt+1');
+ await run("document.querySelector('.sound-favorite').click()");
+ await input('input[aria-label="Search sounds"]','retro');await wait("document.querySelectorAll('.sound-tile').length===1");
+ await run("document.querySelector('.sound-tile > button:last-child').click()");
+ await input('select[aria-label="Assign sound to alert"]','gift:rose','change');
+ await run("document.querySelector('.sound-assignment .primary').click()");
+ await wait("document.body.textContent.includes('Assigned My chiptune')");
+ await run("window.streamPulseCore.testFlush()");
+ const saved=await run('window.streamPulseCore.testState()');assert.equal(saved.soundClips[0].name,'My chiptune');assert.equal(saved.soundClips[0].tags,'retro');assert.equal(saved.soundClips[0].favorite,true);assert.equal(saved.soundClips[0].hotkey,'Ctrl+Alt+1');assert.ok(saved.reactions[0].soundPath.endsWith('chiptune.wav'));
+ // Use a real local clip to verify playback and the emergency stop in Chromium.
+ await run("document.activeElement?.blur();document.querySelector('.sound-play').click()");
+ await wait("document.querySelector('.sound-now').textContent.includes('Playing: My chiptune')");
+ await run("Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Stop all sounds').click()");
+ await wait("document.querySelector('.sound-now').textContent.includes('Ready to play')");
+ win.webContents.send('test:sound-hotkey',saved.soundClips[0].path);
+ await wait("document.querySelector('.sound-now').textContent.includes('Playing: My chiptune')");
+ await run("Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Stop all sounds').click();Object.defineProperty(document,'hasFocus',{configurable:true,value:()=>true});document.querySelector('input[aria-label=\"Search sounds\"]').focus()");
+ win.webContents.send('test:sound-hotkey',saved.soundClips[0].path);await new Promise(r=>setTimeout(r,100));
+ assert.ok(await run("document.querySelector('.sound-now').textContent.includes('Ready to play')"),'Hotkeys do not fire while editing');
+ await run("Object.defineProperty(document,'hasFocus',{configurable:true,value:()=>false});void 0");win.webContents.send('test:sound-hotkey',saved.soundClips[0].path);await wait("document.querySelector('.sound-now').textContent.includes('Playing: My chiptune')");await run("Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Stop all sounds').click()");
+ await input('input[aria-label="Search sounds"]','');
+ await input('select[aria-label="Sound playback mode"]','queue','change');
+ await run("document.activeElement?.blur();document.querySelector('.sound-play').click();document.querySelector('.sound-play').click()");
+ await wait("document.querySelector('.sound-now').textContent.includes('1 queued')");
+ await run("Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Stop all sounds').click()");
+ await wait("document.querySelector('.sound-now').textContent.includes('0 queued')");
+ await input('.sound-tile input[placeholder="Ctrl+Alt+1"]','invalid');await wait("document.body.textContent.includes('Invalid hotkey.')");
+ await input('.sound-tile input[placeholder="Ctrl+Alt+1"]','Ctrl+Alt+1');await wait("!document.body.textContent.includes('Invalid hotkey.')");
+ await run('window.streamPulseCore.testFlush()');
+ await new Promise(r=>setTimeout(r,500));const preview=await win.webContents.capturePage();await fs.writeFile(path.join(__dirname,'../soundboard-preview.png'),preview.toPNG());
+ const reloaded=new Promise(resolve=>win.webContents.once('did-finish-load',resolve));win.reload();await reloaded;await wait("document.querySelector('aside')!==null");await run("Array.from(document.querySelectorAll('aside button')).find(b=>b.textContent==='Sound Library').click()");await wait("document.querySelector('.sound-tile input')?.value==='My chiptune'");
+ assert.equal(await run("document.querySelector('select[aria-label=\"Sound playback mode\"]').value"),'queue');
+ console.log('Passed: soundboard renders, edits persist, tags filter, favorites save, alert assignment, real audio playback, global hotkey dispatch/edit guard, queue/stop, error feedback, and reload persistence.');
+ }catch(error){console.error(error);process.exitCode=1;}finally{win?.destroy();if(process.env.STREAMPULSE_TEST_SOUNDS_FOLDER)await fs.rm(process.env.STREAMPULSE_TEST_SOUNDS_FOLDER,{recursive:true,force:true});app.exit(process.exitCode||0);}});

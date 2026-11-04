@@ -1,0 +1,15 @@
+const assert=require('node:assert/strict');
+const {spokenMoments,mergeMoments,visualCue,montagePlans,validateSearch}=require('../dist-electron/momentSearch');
+const cue={phrase:'Got one',category:'kill'};
+const words=[{start:12,text:'GOT,'},{start:12.2,text:'one!'}];
+const matches=spokenMoments(words,[cue],40,8,6);assert.equal(matches.length,1);assert.equal(matches[0].start,4);assert.equal(matches[0].end,18);
+assert.equal(spokenMoments([{start:0,text:'got'},{start:8,text:'one'}],[cue],40,8,6).length,0);
+assert.equal(spokenMoments([{start:0,text:'forgot'},{start:0.2,text:'one'}],[cue],40,8,6).length,0);
+const duplicate={...matches[0],peakAt:13,sources:['visual'],reason:'Screen text: Eliminated'};
+const merged=mergeMoments([...matches,duplicate]);assert.equal(merged.length,1);assert.deepEqual(merged[0].sources,['spoken','visual']);
+assert.equal(visualCue('#1 VICTORY ROYALE').category,'win');assert.equal(visualCue('ELIMINATED enemy').category,'kill');assert.equal(visualCue('Elimination settings'),null);
+const clips=[{start:1,end:11,category:'kill'},{start:20,end:30,category:'win'},{start:40,end:50,category:'general'}];
+const plans=montagePlans(clips,60,15,3);assert.equal(plans.length,3);assert.ok(plans.every(p=>p.reduce((n,c)=>n+c.end-c.start,0)===15));
+assert.equal(montagePlans([clips[0]],60,15,3).length,1);assert.throws(()=>montagePlans([{start:0,end:61,category:'kill'}],60,15,1));
+assert.throws(()=>validateSearch({audio:false,spoken:false,visual:false}));
+console.log('Cue matching, categorization, deduplication, source times and montage planning passed.');

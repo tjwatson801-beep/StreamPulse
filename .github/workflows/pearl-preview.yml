@@ -1,0 +1,70 @@
+name: Publish Pearl preview
+on:
+  push:
+    branches: [feature/stream-credits-manager]
+    paths:
+      - 'pearl/**'
+      - '.github/workflows/pearl-preview.yml'
+      - 'resources/**'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: pearl-preview-release
+  cancel-in-progress: false
+jobs:
+  pearl:
+    if: github.ref == 'refs/heads/feature/stream-credits-manager'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: pearl
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: pearl/package-lock.json
+      - run: npm ci
+      - name: Generate Pearl Windows icon
+        run: npx electron scripts/render-pearl-icon.cjs
+      - run: npm run build
+      - run: npx tsc --noEmit
+      - name: Test credits and existing LIVE features
+        run: |
+          New-Item -ItemType Directory -Path work -Force | Out-Null
+          $tests = @('credits-manager','tikfinity','direct-tiktok','likes','gift-completion','tts-filters','gift-actions','settings-store','settings-flush','reactions','reconnect','entrances','preview-publication')
+          foreach ($test in $tests) {
+            node "tests/$test.cjs"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          npx electron tests/credits-ui.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npx electron tests/reliability-ui.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build Windows installer
+        run: npm run dist:win -- --publish never
+      - name: Test packaged Pearl runtime and Credits UI
+        run: |
+          npx electron tests/packaged-runtime.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:PEARL_TEST_ASAR = (Resolve-Path 'release-pearl8/win-unpacked/resources/app.asar').Path
+          npx electron tests/credits-ui.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pearl-preview-8-installer
+          path: |
+            pearl/release-pearl8/*.exe
+            pearl/release-pearl8/*.blockmap
+            pearl/release-pearl8/pearl.yml
+      - name: Publish verified installer and update Pearl channel
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/publish-preview.cjs release-pearl8
+
+
+

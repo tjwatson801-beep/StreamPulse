@@ -1,0 +1,100 @@
+{
+  "name": "pearl-preview",
+  "version": "0.1.0-pearl.8",
+  "private": true,
+  "description": "Pearl Midnight design preview for live streaming",
+  "author": "Pearl",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"tsc -p electron/tsconfig.json --watch\" \"wait-on tcp:5173 file:dist-electron/main.js && electron .\"",
+    "build": "vite build && tsc -p electron/tsconfig.json",
+    "start": "electron .",
+    "pack:win": "npm run build && electron-builder --win --dir",
+    "dist:win": "npm run build && electron-builder --win nsis",
+    "release:check": "npm run build && tsc --noEmit && node scripts/release-check.cjs",
+    "video:check": "node scripts/video-check.cjs",
+    "dist:beta": "npm run build && node scripts/beta-preflight.cjs && electron-builder --win nsis --config electron-builder.beta.json --publish never",
+    "pack:beta": "npm run build && node scripts/beta-preflight.cjs && electron-builder --win --dir --config electron-builder.beta.json --publish never",
+    "beta:check": "node scripts/beta-check.cjs",
+    "test:credits": "node tests/credits-manager.cjs"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron-updater": "^6.6.2",
+    "express": "^5.2.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tiktok-live-connector": "2.5.0",
+    "vite": "^6.0.5",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@types/ws": "^8.5.13",
+    "concurrently": "^9.1.2",
+    "electron": "^44.3.0",
+    "electron-builder": "^26.15.3",
+    "typescript": "^5.7.2",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.pearl.preview",
+    "productName": "Pearl Preview",
+    "directories": {
+      "output": "release-pearl8"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../resources/visual-ocr.ps1",
+        "to": "visual-ocr.ps1"
+      },
+      {
+        "from": "../resources/transcribe.py",
+        "to": "transcribe.py"
+      },
+      {
+        "from": "../resources/cloudflared.exe",
+        "to": "cloudflared.exe"
+      },
+      {
+        "from": "assets/pearl-icon.ico",
+        "to": "pearl-icon.ico"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Pearl-Preview-Setup-${version}.${ext}",
+      "icon": "assets/pearl-icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "assets/pearl-icon.ico",
+      "uninstallerIcon": "assets/pearl-icon.ico"
+    },
+    "publish": {
+      "provider": "generic",
+      "url": "https://github.com/tjwatson801-beep/StreamPulse/releases/download/pearl-preview-updates/",
+      "channel": "pearl",
+      "useMultipleRangeRequest": false
+    }
+  }
+}
