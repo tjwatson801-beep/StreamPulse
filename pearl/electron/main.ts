@@ -1,3 +1,4 @@
+import { SpotifyRequests } from './spotifyRequests';
 import { CreditsManager } from './creditsManager';
 import { setupVideoEngine } from './videoEngine';
 import { flushRendererSettings } from './settingsFlush';
@@ -26,6 +27,7 @@ let window: BrowserWindow | null = null;
 const primaryInstance = claimInstance(app, () => window);
 const settingsStore = new SettingsStore(app.getPath("userData"));
 const credits = new CreditsManager(app.getPath('userData'), () => send('credits:changed', credits.snapshot()));
+const spotify = new SpotifyRequests(app.getPath('userData'), () => send('spotify:changed', spotify.snapshot()));
 const soundHotkeys = new SoundHotkeys(globalShortcut, soundPath => send('core:sound-hotkey', soundPath));
 app.on('will-quit', () => soundHotkeys.clear());
 let provider: LiveProvider | null = null;
@@ -103,6 +105,7 @@ function bind(current: LiveProvider) {
   current.onEvent((event: LiveEvent) => {
     if (current !== provider) return;
     credits.collect(event);
+    if (event.type === 'Chat') spotify.collect(event.user, event.detail);
     if (event.type === "Like") { const before = likesTracker.viewerLikes(event.user); if (likesTracker.add(event)) { publishLikes(); processLibraryEvent(event, before, likesTracker.viewerLikes(event.user)); } return; }
     if (event.type === "Gift") processLibraryEvent(event);
     send("core:event", event);
@@ -156,6 +159,8 @@ async function createWindow() {
 app.whenReady().then(async () => {
   if (!primaryInstance) return;
   try { await settingsStore.backup(`Startup ${app.getVersion()}`); } catch { diagnosticLog("Startup backup failed; settings file may need recovery."); }
+  await spotify.load();
+  spotify.register();
   videoEngine = setupVideoEngine();
   setupUpdater(() => reconnectEnabled, async () => { await flushSettings(); await settingsStore.backup("Before update"); await disconnect(); await stopSecureTunnel(); await stopOverlayServer(); closing = true; }, () => Boolean(videoEngine?.isBusy()));
   diagnosticLog(`Pearl ${app.getVersion()} started`);

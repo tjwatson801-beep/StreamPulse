@@ -2,6 +2,20 @@ import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("streamPulseCore", {
   credits: { export: (html: string) => ipcRenderer.invoke('credits:export', html), load: () => ipcRenderer.invoke('credits:load'), edit: (args: unknown) => ipcRenderer.invoke('credits:edit', args), start: () => ipcRenderer.invoke('credits:start'), end: () => ipcRenderer.invoke('credits:end'), onChange: (handler: (state: any) => void) => { const listener = (_: unknown, state: any) => handler(state); ipcRenderer.on('credits:changed', listener); return () => ipcRenderer.removeListener('credits:changed', listener); } },
+  spotify: {
+    status: () => ipcRenderer.invoke("spotify:status"),
+    connect: (clientId: string) => ipcRenderer.invoke("spotify:connect", clientId),
+    disconnect: () => ipcRenderer.invoke("spotify:disconnect"),
+    enable: (enabled: boolean) => ipcRenderer.invoke("spotify:enable", enabled),
+    approve: (id: string) => ipcRenderer.invoke("spotify:approve", id),
+    dismiss: (id: string) => ipcRenderer.invoke("spotify:dismiss", id),
+    preview: (id: string) => ipcRenderer.invoke("spotify:preview", id),
+    onChange: (handler: (state: unknown) => void) => {
+      const listener = (_: unknown, state: unknown) => handler(state);
+      ipcRenderer.on("spotify:changed", listener);
+      return () => ipcRenderer.removeListener("spotify:changed", listener);
+    },
+  },
   video: {
     status: () => ipcRenderer.invoke('video:status'),
     analyze: (id: string) => ipcRenderer.invoke('video:analyze', id),

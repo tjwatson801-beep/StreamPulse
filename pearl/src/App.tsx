@@ -19,7 +19,9 @@ import { rememberSticker } from "./stickerCatalog";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { defaults, LiveEvent, Settings, SuperFanProfile } from "./types";
 
-type Page = "Credits Manager" | "Setup" | "Golden Moments" | "Sound Library" | "Actions" | "Live" | "Chat TTS" | "Gift Reactions" | "Sticker Sounds" | "Like Rankings" | "Overlay" | "Settings";
+import { SpotifyRequests } from "./SpotifyRequests";
+
+type Page = "Song Requests" | "Credits Manager" | "Setup" | "Golden Moments" | "Sound Library" | "Actions" | "Live" | "Chat TTS" | "Gift Reactions" | "Sticker Sounds" | "Like Rankings" | "Overlay" | "Settings";
 type Activity = { id: string; time: string; level: "event" | "action" | "blocked" | "error"; text: string; stickerImageUrl?: string };
 const viewerName = (event: LiveEvent) => event.displayName?.trim() || event.user || "viewer";
 const fill = (template: string, event: LiveEvent) => template.replaceAll("{username}", viewerName(event)).replaceAll("{nickname}", viewerName(event)).replaceAll("{handle}", event.user || "viewer").replaceAll("{message}", event.detail || "").replaceAll("{gift}", event.giftName || "gift").replaceAll("{count}", String(event.count || 1));
@@ -170,7 +172,7 @@ export default function App() {
     <p className={permanentTunnel?"good":"muted"}>{permanentTunnel?"Permanent tunnel connected. This overlay address will not change.":hasTunnelKey?"A permanent tunnel credential is stored securely on this PC.":"The token is encrypted using Windows protection and is never shown again."}</p>
   </section>;
 
-  return <div className="shell"><aside><div className="brand"><span className="pearl-mark" aria-hidden="true"></span><div><strong>Pearl</strong><small>Midnight Pearl · Preview</small></div></div>{(["Setup","Live","Credits Manager","Golden Moments","Sound Library","Actions","Chat TTS","Gift Reactions","Sticker Sounds","Like Rankings","Overlay","Settings"] as Page[]).map(item => <button className={page===item?"active":""} onClick={()=>setPage(item)} key={item}>{item}</button>)}<div className={`connection ${status}`}><i/><span>{statusText}</span></div></aside><main><Updates compact={page !== "Settings"} open={() => setPage("Settings")} live={["connected","connecting","reconnecting"].includes(status)} save={async () => { const result = await window.streamPulseCore?.save(settingsRef.current); if (!result?.ok) throw new Error("Settings could not be saved"); }}/>
+  return <div className="shell"><aside><div className="brand"><span className="pearl-mark" aria-hidden="true"></span><div><strong>Pearl</strong><small>Midnight Pearl · Preview</small></div></div>{(["Setup","Live","Credits Manager","Golden Moments","Sound Library","Actions","Chat TTS","Song Requests","Gift Reactions","Sticker Sounds","Like Rankings","Overlay","Settings"] as Page[]).map(item => <button className={page===item?"active":""} onClick={()=>setPage(item)} key={item}>{item}</button>)}<div className={`connection ${status}`}><i/><span>{statusText}</span></div></aside><main><Updates compact={page !== "Settings"} open={() => setPage("Settings")} live={["connected","connecting","reconnecting"].includes(status)} save={async () => { const result = await window.streamPulseCore?.save(settingsRef.current); if (!result?.ok) throw new Error("Settings could not be saved"); }}/>
     <div hidden={page !== 'Credits Manager'}><CreditsManager/></div>
     {page==='Setup'&&<Setup settings={settings} update={setSettings} overlayUrl={overlayUrl} secure={secureOverlay} tunnelError={tunnelError} connect={connect} connectionStatus={statusText} refresh={refreshSecureLink} testVoice={()=>speak('Pearl voice is ready')} finish={()=>{setSettings(current=>({...current,setupComplete:true}));setPage('Live');}}/>}
     <div hidden={page !== 'Golden Moments'}><GoldenMoments/></div>
@@ -196,6 +198,7 @@ export default function App() {
       </section>
       <section className="card"><h2>Recent chat</h2>{events.filter(e=>e.type==="Chat").slice(0,15).map(e=><div className="activity" key={e.id}><time>{e.time}</time><span><b>{viewerName(e)}</b> · {followerLabel(e)} · {e.detail}</span></div>)}</section>
     </>}
+    {page === "Song Requests" && <SpotifyRequests/>}
     {page === "Actions" && <Actions settings={settings} update={setSettings} test={rule => runGiftAction(rule, { id: crypto.randomUUID(), type: "Gift", user: "GoldFan", detail: "Action test", time: new Date().toLocaleTimeString(), giftName: rule.giftName, count: rule.minimumCount, comboComplete: true })}/>}
     {page === "Gift Reactions" && <GiftReactions settings={settings} update={setSettings} pickSound={()=>window.streamPulseCore?.pickSound() || Promise.resolve(null)} preview={playSound}/>}
     {page === "Like Rankings" && <LikeRankings overlayUrl={overlayUrl} secure={secureOverlay} settings={settings} update={setSettings}/>}
