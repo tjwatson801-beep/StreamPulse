@@ -5,8 +5,9 @@ import path from "node:path";
 import { ipcMain, safeStorage, shell } from "electron";
 
 const loopback = "http://127.0.0.1";
+const callbackPort = 8888;
 const callbackPath = "/spotify/callback";
-const redirectRegistration = loopback + callbackPath;
+const redirectRegistration = loopback + ":" + callbackPort + callbackPath;
 const tokenEndpoint = "https://accounts.spotify.com/api/token";
 
 type SongRequest = { id: string; user: string; trackId: string };
@@ -35,15 +36,16 @@ async function authorize(clientId: string) {
   const server = createServer();
   try {
     await new Promise<void>((resolve, reject) => {
-      server.once("error", reject);
-      server.listen(0, "127.0.0.1", () => {
-        server.removeListener("error", reject);
+      const onError = (error: NodeJS.ErrnoException) => reject(error.code === "EADDRINUSE"
+        ? new Error("Port 8888 is in use. Close the other app using this port and reconnect Spotify.")
+        : error);
+      server.once("error", onError);
+      server.listen(callbackPort, "127.0.0.1", () => {
+        server.removeListener("error", onError);
         resolve();
       });
     });
-    const address = server.address();
-    if (!address || typeof address === "string") throw Error("Could not start the Spotify sign-in callback.");
-    const redirectUri = `${loopback}:${address.port}${callbackPath}`;
+    const redirectUri = redirectRegistration;
     const authorizeUrl = new URL("https://accounts.spotify.com/authorize");
     authorizeUrl.search = new URLSearchParams({
       client_id: clientId, response_type: "code", redirect_uri: redirectUri,
@@ -76,7 +78,7 @@ async function authorize(clientId: string) {
     });
     return await exchange({ grant_type: "authorization_code", client_id: clientId, code, redirect_uri: redirectUri, code_verifier: verifier });
   } finally {
-    server.close();
+    if (server.listening) server.close();
     server.closeAllConnections();
   }
 }
