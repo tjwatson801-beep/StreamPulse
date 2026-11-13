@@ -79,7 +79,7 @@ async function readTunnelToken() { try { const data = await fs.readFile(tunnelSe
 async function readPermanentHostname() { try { const state = JSON.parse(await fs.readFile(statePath(), "utf8")); return normalizeHostname(state?.permanentOverlayHostname || ""); } catch { return ""; } }
 async function tunnelConfig() { return { token: await readTunnelToken(), hostname: await readPermanentHostname() }; }
 function clearReconnect() { if (reconnectTimer) clearTimeout(reconnectTimer); reconnectTimer = null; }
-async function disconnect(manual = true) { if (manual) { connectRevision++; reconnectEnabled = false; activeUsername = ""; } clearReconnect(); const current = provider; provider = null; await current?.disconnect().catch(() => undefined); }
+async function disconnect(manual = true) { if (manual) { connectRevision++; reconnectEnabled = false; activeUsername = ""; } const revision = connectRevision; clearReconnect(); const current = provider; provider = null; await current?.disconnect().catch(() => undefined); if (manual && revision === connectRevision) send("core:status", { status: "disconnected", message: "Disconnected" }); }
 function stopForRateLimit(message?: string) {
   // Offline and stream-end are expected while waiting for the next LIVE.
   if (autoConnectLive && /^(This TikTok account is not LIVE\.|The LIVE ended\.)/.test(message || "")) return false;
@@ -162,7 +162,7 @@ app.whenReady().then(async () => {
   await spotify.load();
   spotify.register();
   videoEngine = setupVideoEngine();
-  setupUpdater(() => reconnectEnabled, async () => { await flushSettings(); await settingsStore.backup("Before update"); await disconnect(); await stopSecureTunnel(); await stopOverlayServer(); closing = true; }, () => Boolean(videoEngine?.isBusy()));
+  setupUpdater(() => provider?.status() === "connected", async () => { await disconnect(); await flushSettings(); await settingsStore.backup("Before update"); await stopSecureTunnel(); await stopOverlayServer(); closing = true; }, () => Boolean(videoEngine?.isBusy()));
   diagnosticLog(`Pearl ${app.getVersion()} started`);
   ipcMain.handle("core:gift-catalog", async () => ({ ok: false, error: "Pearl uses your saved gift library and automatically adds gifts received during LIVE. A full catalog download is not available through this connection." }));
   ipcMain.handle("core:diagnostics", async () => {
