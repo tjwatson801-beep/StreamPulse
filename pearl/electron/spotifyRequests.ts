@@ -10,7 +10,7 @@ const callbackPath = "/spotify/callback";
 const redirectRegistration = loopback + ":" + callbackPort + callbackPath;
 const tokenEndpoint = "https://accounts.spotify.com/api/token";
 
-type SongRequest = { id: string; user: string; trackId: string };
+type SongRequest = { id: string; user: string; trackId: string; query?: string; title?: string };
 type Credentials = { clientId: string; refreshToken: string };
 type SpotifyToken = { access_token: string; expires_in: number; refresh_token?: string };
 
@@ -132,8 +132,12 @@ export class SpotifyRequests {
       if (!this.credentials || typeof enabled !== "boolean") throw Error("Connect Spotify before enabling requests.");
       this.enabled = enabled;
     }));
+    ipcMain.handle("spotify:resolve", (_event, id: unknown) => this.run(async () => {
+      await this.resolve(this.find(id));
+    }));
     ipcMain.handle("spotify:approve", (_event, id: unknown) => this.run(async () => {
       const request = this.find(id);
+      if (!request.trackId) throw Error("Find the song before approving this request.");
       await this.queue(request.trackId);
       this.pending = this.pending.filter(item => item.id !== id);
     }));
@@ -142,24 +146,52 @@ export class SpotifyRequests {
       this.pending = this.pending.filter(item => item.id !== id);
     }));
     ipcMain.handle("spotify:preview", (_event, id: unknown) => this.run(async () => {
-      await shell.openExternal(`https://open.spotify.com/track/${this.find(id).trackId}`);
+      const request = this.find(id);
+      if (!request.trackId) throw Error("Find the song before opening this request.");
+      await shell.openExternal(`https://open.spotify.com/track/${request.trackId}`);
     }));
   }
 
   collect(user: string, message: string) {
     if (!this.enabled || this.pending.length >= 25) return;
-    const track = /^!sr\s+(?:https:\/\/open\.spotify\.com\/track\/|spotify:track:)([a-z0-9]{22})(?:\?[^\s]*)?$/i.exec(message.trim());
-    if (!track) return;
-    const trackId = track[1];
+    const command = /^!sr\s+(.+)$/i.exec(message.trim());
+    if (!command) return;
+    const query = command[1].trim();
+    if (!query) return;
+    const track = /^!sr\s+(?:https:\/\/open\.spotify\.com\/(?:intl-[a-z-]+\/)?track\/|spotify:track:)([a-z0-9]{22})(?:\?[^\s]*)?$/i.exec(message.trim());
+    if (!track && (query.length > 200 || /https?:\/\/|spotify:/i.test(query))) return;
+    const trackId = track?.[1] || "";
     const viewer = user.toLowerCase();
     const now = Date.now();
     for (const [name, expires] of this.recent) {
       if (expires <= now) this.recent.delete(name);
     }
-    if (this.recent.has(viewer) || this.pending.some(item => item.trackId === trackId || item.user.toLowerCase() === viewer)) return;
+    if (this.recent.has(viewer) || this.pending.some(item => (trackId ? item.trackId === trackId : item.query?.toLowerCase() === query.toLowerCase()) || item.user.toLowerCase() === viewer)) return;
     this.recent.set(viewer, now + 60000);
-    this.pending.push({ id: randomUUID(), user, trackId });
+    this.pending.push({ id: randomUUID(), user, trackId, query: trackId ? undefined : query });
     this.changed();
+  }
+
+
+  private async resolve(request: SongRequest) {
+    if (request.trackId) return;
+    if (!request.query) throw Error("This request has no song name.");
+    const url = new URL("https://api.spotify.com/v1/search");
+    url.search = new URLSearchParams({ q: request.query, type: "track", limit: "1" }).toString();
+    const search = async () => fetch(url, {
+      headers: { Authorization: `Bearer ${await this.accessToken()}` },
+      signal: AbortSignal.timeout(10000),
+    });
+    let response = await search();
+    if (response.status === 401) { this.token = null; response = await search(); }
+    if (response.status === 429) throw Error("Spotify is limiting searches. Wait briefly and try again.");
+    if (!response.ok) throw Error(`Spotify search failed (HTTP ${response.status}). Try again shortly.`);
+    const result = await response.json() as { tracks?: { items?: Array<{ id: string; name: string; artists?: Array<{ name: string }> }> } };
+    const track = result.tracks?.items?.[0];
+    if (!track || !/^[a-z0-9]{22}$/i.test(track.id)) throw Error("No matching song found. Ask the viewer to include the artist name.");
+    if (this.pending.some(item => item.id !== request.id && item.trackId === track.id)) throw Error("That song is already pending. Dismiss this duplicate request.");
+    request.trackId = track.id;
+    request.title = [track.name, track.artists?.map(artist => artist.name).join(", ")].filter(Boolean).join(" — ");
   }
 
   private find(id: unknown) {

@@ -5,7 +5,7 @@ type State = {
   enabled: boolean;
   busy: boolean;
   redirectUri: string;
-  pending: { id: string; user: string; trackId: string }[];
+  pending: { id: string; user: string; trackId: string; query?: string; title?: string }[];
 };
 type Result = Promise<{ error?: string }>;
 
@@ -14,6 +14,7 @@ export type SpotifyApi = {
   connect: (clientId: string) => Result;
   disconnect: () => Result;
   enable: (enabled: boolean) => Result;
+  resolve: (id: string) => Result;
   approve: (id: string) => Result;
   dismiss: (id: string) => Result;
   preview: (id: string) => Result;
@@ -56,7 +57,7 @@ export function SpotifyRequests() {
     <header><div><small>CHAT</small><h1>Song requests</h1></div></header>
     <section className="card form">
       <h2>Spotify</h2>
-      <p>Viewers can send <code>!sr &lt;Spotify track link&gt;</code> in LIVE chat. Approve a request to add it to the queue on your active Spotify device.</p>
+      <p>Viewers can send <code>!sr song name artist</code> in LIVE chat, for example <code>!sr Bohemian Rhapsody Queen</code>. Click Find song to review Spotify’s top match, then approve it for your queue. Spotify track links also work.</p>
       {!api && <p>Open the Pearl desktop app to connect Spotify.</p>}
       {api && state && (state.connected ? <>
         <label className="switch"><input type="checkbox" checked={state.enabled} disabled={state.busy} onChange={event => {
@@ -79,10 +80,12 @@ export function SpotifyRequests() {
       {!state.pending.length && <p>No pending song requests.</p>}
       {state.pending.map(request => <div key={request.id} className="followBox">
         <strong>@{request.user}</strong>
-        <small>Spotify track {request.trackId}</small>
+        {request.query && <small>Requested: {request.query}</small>}
+        <small>{request.title || (request.trackId ? "Spotify track " + request.trackId : "Ready to find this song")}</small>
         <div className="row">
-          <button disabled={state.busy} onClick={() => void run(() => api.preview(request.id))}>Open track</button>
-          <button className="primary" disabled={state.busy} onClick={() => void run(() => api.approve(request.id), `Queued @${request.user}’s request in Spotify.`)}>Approve and queue</button>
+          {!request.trackId && <button className="primary" disabled={state.busy} onClick={() => void run(() => api.resolve(request.id))}>Find song</button>}
+          {request.trackId && <button disabled={state.busy} onClick={() => void run(() => api.preview(request.id))}>Open track</button>}
+          {request.trackId && <button className="primary" disabled={state.busy} onClick={() => void run(() => api.approve(request.id), `Queued @${request.user}’s request in Spotify.`)}>Approve and queue</button>}
           <button disabled={state.busy} onClick={() => void run(() => api.dismiss(request.id))}>Dismiss</button>
         </div>
       </div>)}

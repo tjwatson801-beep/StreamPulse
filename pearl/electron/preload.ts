@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("streamPulseCore", {
     connect: (clientId: string) => ipcRenderer.invoke("spotify:connect", clientId),
     disconnect: () => ipcRenderer.invoke("spotify:disconnect"),
     enable: (enabled: boolean) => ipcRenderer.invoke("spotify:enable", enabled),
+    resolve: (id: string) => ipcRenderer.invoke("spotify:resolve", id),
     approve: (id: string) => ipcRenderer.invoke("spotify:approve", id),
     dismiss: (id: string) => ipcRenderer.invoke("spotify:dismiss", id),
     preview: (id: string) => ipcRenderer.invoke("spotify:preview", id),

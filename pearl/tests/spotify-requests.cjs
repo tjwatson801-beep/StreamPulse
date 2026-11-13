@@ -7,6 +7,9 @@ const handlers = new Map();
 let stored = JSON.stringify({ clientId: "a".repeat(32), refreshToken: "refresh" });
 let mode = "ok";
 let attempts = 0;
+let searches = 0;
+let searchMode = "ok";
+const searchQueries = [];
 let changes = 0;
 let authorizationChallenge = "";
 let authorizationExchanges = 0;
@@ -51,6 +54,20 @@ const context = {
       }
       return { ok: true, json: async () => ({ access_token: "access", expires_in: 3600, refresh_token: "rotated" }) };
     }
+
+    if (String(url).startsWith("https://api.spotify.com/v1/search?")) {
+      const query = new URL(url);
+      searchQueries.push(query.searchParams.get("q"));
+      assert.equal(query.searchParams.get("type"), "track");
+      assert.equal(query.searchParams.get("limit"), "1");
+      assert.equal(options.headers.Authorization, "Bearer access");
+      searches++;
+      const status = searchMode === "limited" ? 429 : searchMode === "unauthorized" && searches === 1 ? 401 : 200;
+      return { ok: status === 200, status, json: async () => ({
+        tracks: { items: searchMode === "empty" ? [] : [{ id: track(501), name: "Hello", artists: [{ name: "Adele" }] }] },
+      }) };
+    }
+
     assert.equal(options.method, "POST");
     assert.equal(options.headers.Authorization, "Bearer access");
     assert.match(String(url), /^https:\/\/api.spotify.com\/v1\/me\/player\/queue\?uri=spotify%3Atrack%3A/);
@@ -113,6 +130,45 @@ const request = n => "!sr https://open.spotify.com/track/" + track(n);
   assert.equal(spotify.snapshot().pending.length, 1);
   await call("preview", id);
   await call("dismiss", id);
+
+  mode = "ok";
+  spotify.collect("namefan", "!sr Hello Adele");
+  spotify.collect("secondfan", "!sr Stay Rihanna");
+  spotify.collect("copyfan", "!sr hello adele");
+  assert.equal(spotify.snapshot().pending.length, 2);
+  let named = spotify.snapshot().pending[0];
+  assert.equal(named.query, "Hello Adele");
+  assert.equal(named.trackId, "");
+  assert.match((await call("approve", named.id)).error, /Find the song/);
+  assert.match((await call("preview", named.id)).error, /Find the song/);
+  assert.equal((await call("resolve", named.id)).error, undefined);
+  assert.equal(named.title, "Hello — Adele");
+  assert.equal(named.trackId, track(501));
+  assert.equal(searchQueries.at(-1), "Hello Adele");
+  const duplicate = spotify.snapshot().pending[1];
+  assert.match((await call("resolve", duplicate.id)).error, /already pending/);
+  assert.equal(duplicate.trackId, "");
+  await call("dismiss", duplicate.id);
+  await call("approve", named.id);
+  assert.equal(spotify.snapshot().pending.length, 0);
+
+  spotify.collect("unicodefan", "!sr Édith Piaf La Vie en Rose");
+  named = spotify.snapshot().pending[0];
+  searchMode = "empty";
+  assert.match((await call("resolve", named.id)).error, /No matching song/);
+  assert.equal(named.trackId, "");
+  searchMode = "limited";
+  assert.match((await call("resolve", named.id)).error, /limiting searches/);
+  assert.equal(named.trackId, "");
+  searchMode = "unauthorized"; searches = 0;
+  assert.equal((await call("resolve", named.id)).error, undefined);
+  assert.equal(searches, 2);
+  assert.equal(searchQueries.at(-1), "Édith Piaf La Vie en Rose");
+  await call("dismiss", named.id);
+  spotify.collect("localizedfan", "!sr https://open.spotify.com/intl-en/track/" + track(502) + "?si=test");
+  assert.equal(spotify.snapshot().pending[0].trackId, track(502));
+  await call("dismiss", spotify.snapshot().pending[0].id);
+
   for (let n = 10; n < 40; n++) spotify.collect("user" + n, request(n));
   assert.equal(spotify.snapshot().pending.length, 25);
   await call("enable", false);
